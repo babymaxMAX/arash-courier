@@ -1,190 +1,159 @@
-// File — работа с файлами на устройстве (фото перед загрузкой в Storage).
 import 'dart:io';
-// Клиент Supabase (PostgREST, Storage).
+
 import 'package:supabase_flutter/supabase_flutter.dart';
-// Модель заказа для типизации данных из БД.
 import 'package:arash_curier/models/order_model.dart';
+import 'package:arash_curier/services/isar_service.dart' show isar, syncService;
+import 'package:arash_curier/services/sync_service.dart';
 
-// Сервис CRUD-операций с таблицей orders и bucket packages в Storage.
+/// CRUD заказов: мутации через SyncService, чтение — Supabase с офлайн-кэшем.
 class DatabaseService {
-  // Единый клиент, созданный при Supabase.initialize в main().
   final supabase = Supabase.instance.client;
+  SyncService get _sync => syncService;
 
-  // Загружает заказы, группирует по «компания - адрес»; role влияет на фильтр статусов.
   Future<Map<String, List<OrderModel>>> fetchAndSortOrders(String role) async {
-    try {
-      var query = supabase.from("orders").select();
+    if (await _sync.isOnline) {
+      try {
+        var query = supabase.from('orders').select();
 
-      // Фильтруем прямо в запросе к БД
-      if (role == 'courier') {
-        query = query.not('status', 'in', '("Выдано", "Отменено", "Возврат", "ISSUED", "CANCELLED", "CANCELED", "RETURN", "RETURNED")');
+        if (role == 'courier') {
+          query = query.not(
+            'status',
+            'in',
+            '("Выдано", "Отменено", "Возврат", "ISSUED", "CANCELLED", "CANCELED", "RETURN", "RETURNED")',
+          );
+        }
+
+        final rawResponse = await query;
+        final sortedOrders = <String, List<OrderModel>>{};
+
+        for (final row in rawResponse) {
+          final orderModel = OrderModel.fromJson(row);
+          final folderKey =
+              '${orderModel.companyName} - ${orderModel.companyAddress}';
+          sortedOrders.putIfAbsent(folderKey, () => []).add(orderModel);
+        }
+
+        await _sync.cacheOrders(
+          sortedOrders.values.expand((list) => list),
+        );
+        await _sync.trySync();
+
+        return sortedOrders;
+      } catch (e) {
+        final cached = await _sync.loadOrdersFromCache(role);
+        if (cached.isNotEmpty) return cached;
+        throw Exception('Failed to fetch orders: $e');
       }
-
-      final rawResponse = await query;
-      Map<String, List<OrderModel>> sortedOrders = {};
-
-      for (var order in rawResponse) {
-        final orderModel = OrderModel.fromJson(order);
-        final String folderKey = "${orderModel.companyName} - ${orderModel.companyAddress}";
-
-        sortedOrders[folderKey] ??= [];
-        sortedOrders[folderKey]!.add(orderModel);
-      }
-
-      return sortedOrders;
-    } catch (e) {
-      print("Error fetching orders: $e");
-      throw Exception('Failed to fetch orders: $e');
     }
+
+    final cached = await _sync.loadOrdersFromCache(role);
+    if (cached.isEmpty) {
+      throw Exception('Нет сети и локальный кэш пуст');
+    }
+    return cached;
   }
 
-  // UPDATE orders SET comment = text WHERE id = id.
   Future<void> updateOrderComment(String id, String text) async {
-    try {
-      await supabase.from('orders').update({'comment': text}).eq('id', id);
-
-      print('Order comment updated successfully');
-    } catch (e) {
-      print('Error updating order comment: $e');
-      rethrow;
-    }
+    await _sync.applyLocalOrderPatch(id, (o) => o.comment = text);
+    await _sync.enqueue('updateOrderComment', {
+      'orderId': id,
+      'comment': text,
+    });
   }
 
-  // UPDATE orders SET client_payment = amount WHERE id = id.
   Future<void> updateClientPayment(String id, double amount) async {
-    try {
-      await supabase.from('orders').update({'client_payment': amount}).eq('id', id);
-
-      print('Client payment updated successfully');
-    } catch (e) {
-      print('Error updating client payment: $e');
-      rethrow;
-    }
+    await _sync.applyLocalOrderPatch(id, (o) => o.clientPayment = amount);
+    await _sync.enqueue('updateClientPayment', {
+      'orderId': id,
+      'amount': amount,
+    });
   }
 
-  // Ставит статус delayed и сохраняет причину в cancel_reason.
   Future<void> delayOrder(String id, String reason) async {
-    try {
-      await supabase.from('orders').update({
-        'status': 'delayed', // Английское значение в БД (переводится при чтении).
-        'cancel_reason': reason // Текст причины отложения.
-      }).eq('id', id);
-
-      print('Order delayed successfully');
-    } catch (e) {
-      print('Error delaying order: $e');
-      rethrow;
-    }
+    await _sync.applyLocalOrderPatch(id, (o) {
+      o.status = 'Отложено';
+      o.cancelReason = reason;
+    });
+    await _sync.enqueue('delayOrder', {
+      'orderId': id,
+      'reason': reason,
+    });
   }
 
-  // Загружает файл в Storage bucket packages и пишет публичный URL в orders.url_photo.
   Future<String?> uploadOrderPhoto(String id, File imageFile) async {
-    try {
-      // Жестко привязываем имя к ID заказа (без миллисекунд)
-      final fileName = 'order_$id.jpg';
+    final localPath = imageFile.path;
+    await _sync.applyLocalOrderPatch(id, (o) {
+      o.urlPhoto = localPath;
+    });
 
-      await supabase.storage.from('packages').upload(
-        fileName,
-        imageFile,
-        fileOptions: const FileOptions(upsert: true),
-      );
-
-      final baseUrl = supabase.storage.from('packages').getPublicUrl(fileName);
-      // Миллисекунды оставляем только в ссылке (URL), чтобы сбрасывать кэш картинок в приложении
-      final publicUrl = '$baseUrl?t=${DateTime.now().millisecondsSinceEpoch}';
-
-      await supabase
-          .from('orders')
-          .update({'url_photo': publicUrl})
-          .eq('id', id);
-
-      print('Order photo uploaded successfully');
-      return publicUrl;
-    } catch (e) {
-      print('Error uploading order photo: $e');
-      rethrow;
+    if (await _sync.isOnline) {
+      try {
+        await _sync.enqueue('uploadOrderPhoto', {
+          'orderId': id,
+          'localPath': localPath,
+        });
+        final row = await supabase
+            .from('orders')
+            .select('url_photo')
+            .eq('id', id)
+            .maybeSingle();
+        return row?['url_photo'] as String?;
+      } catch (e) {
+        await _sync.enqueue('uploadOrderPhoto', {
+          'orderId': id,
+          'localPath': localPath,
+        });
+        return localPath;
+      }
     }
+
+    await _sync.enqueue('uploadOrderPhoto', {
+      'orderId': id,
+      'localPath': localPath,
+    });
+    return localPath;
   }
 
-  // UPDATE pvz_qr_code после сканирования штрих-кода ПВЗ / Адлер.
   Future<void> updatePvzQr(String id, String qrCode) async {
-    try {
-      await supabase
-          .from('orders')
-          .update({'pvz_qr_code': qrCode})
-          .eq('id', id);
-
-      print('Order PVZ QR updated successfully');
-    } catch (e) {
-      print('Error updating PVZ QR: $e');
-      rethrow;
-    }
+    await _sync.applyLocalOrderPatch(id, (o) => o.pvzQrCode = qrCode);
+    await _sync.enqueue('updatePvzQr', {
+      'orderId': id,
+      'qrCode': qrCode,
+    });
   }
 
-  // UPDATE client_qr_code после сканирования QR на экране курьера.
   Future<void> updateOrderQr(String id, String qrCode) async {
-    try {
-      await supabase
-          .from('orders')
-          .update({'client_qr_code': qrCode})
-          .eq('id', id);
-
-      print('Order QR updated successfully');
-    } catch (e) {
-      print('Error updating order QR: $e');
-      rethrow;
-    }
+    await _sync.applyLocalOrderPatch(id, (o) => o.clientQrCode = qrCode);
+    await _sync.enqueue('updateOrderQr', {
+      'orderId': id,
+      'qrCode': qrCode,
+    });
   }
 
-  // Очищает поле url_photo (пустая строка вместо null).
   Future<void> clearOrderPhoto(String id) async {
-    try {
-      await supabase
-          .from('orders')
-          .update({'url_photo': ''})
-          .eq('id', id);
-
-      print('Order photo cleared successfully');
-    } catch (e) {
-      print('Error clearing order photo: $e');
-      rethrow;
-    }
+    await _sync.applyLocalOrderPatch(id, (o) => o.urlPhoto = '');
+    await _sync.enqueue('clearOrderPhoto', {'orderId': id});
   }
 
-  // Очищает сохранённый QR клиента.
   Future<void> clearOrderQr(String id) async {
-    try {
-      await supabase
-          .from('orders')
-          .update({'client_qr_code': ''})
-          .eq('id', id);
-
-      print('Order QR cleared successfully');
-    } catch (e) {
-      print('Error clearing order QR: $e');
-      rethrow;
-    }
+    await _sync.applyLocalOrderPatch(id, (o) => o.clientQrCode = '');
+    await _sync.enqueue('clearOrderQr', {'orderId': id});
   }
 
-  // Меняет статус заказа (например READY, SHIPPING — англ. в БД).
   Future<void> updateOrderStatus(String id, String status) async {
-    try {
-      await supabase.from('orders').update({'status': status}).eq('id', id);
-      print('Order status updated successfully');
-    } catch (e) {
-      print('Error updating order status: $e');
-      rethrow; // <-- ПРОСТО ДОБАВЬ ЭТУ СТРОКУ ВО ВСЕ ПОДОБНЫЕ МЕТОДЫ
-    }
+    await _sync.applyLocalOrderPatch(id, (o) => o.status = status);
+    await _sync.enqueue('updateOrderStatus', {
+      'orderId': id,
+      'status': status,
+    });
   }
 
-  // INSERT новой строки из JSON модели (toJson).
   Future<void> createOrder(OrderModel order) async {
-    try {
-      await supabase.from('orders').insert(order.toJson());
-      print('Order created successfully');
-    } catch (e) {
-      print('Error creating order: $e');
-      rethrow;
-    }
+    await isar.writeTxn(() async {
+      await isar.orderModels.put(order);
+    });
+    await _sync.enqueue('createOrder', {
+      'order': order.toJson(),
+    });
   }
 }

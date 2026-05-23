@@ -24,7 +24,7 @@ class OrderDelayDialog {
           title: const Text('Отложить заказ'),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           content: DropdownButtonFormField<String>(
-            value: selected,
+            initialValue: selected,
             decoration: const InputDecoration(labelText: 'Причина'),
             items: _reasons
                 .map((r) => DropdownMenuItem(value: r, child: Text(r)))

@@ -20,7 +20,7 @@ class _HomeScreenState extends State<HomeScreen> {
   String _searchQuery = '';
   Map<String, List<OrderModel>>? _allOrders;
   bool _isLoading = true;
-  final String _userRole = 'courier';
+  String _userRole = 'courier';
 
   int get _totalOrders {
     final orders = _allOrders;
@@ -91,7 +91,22 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    _refreshOrders();
+    _initData();
+  }
+
+  Future<void> _initData() async {
+    try {
+      final role = await AuthService().getUserRole();
+      if (mounted) {
+        setState(() {
+          _userRole = role;
+        });
+      }
+    } catch (e) {
+      print('Ошибка получения роли: $e');
+    } finally {
+      await _refreshOrders();
+    }
   }
 
   @override

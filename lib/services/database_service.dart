@@ -13,41 +13,27 @@ class DatabaseService {
   // Загружает заказы, группирует по «компания - адрес»; role влияет на фильтр статусов.
   Future<Map<String, List<OrderModel>>> fetchAndSortOrders(String role) async {
     try {
-      // SELECT * FROM orders — список Map<String, dynamic>.
-      final rawResponse = await supabase.from("orders").select();
+      var query = supabase.from("orders").select();
 
-      // Результат: ключ папки → список заказов в этой «папке» ПВЗ.
+      // Фильтруем прямо в запросе к БД
+      if (role == 'courier') {
+        query = query.not('status', 'in', '("Выдано", "Отменено", "Возврат", "ISSUED", "CANCELLED", "CANCELED", "RETURN", "RETURNED")');
+      }
+
+      final rawResponse = await query;
       Map<String, List<OrderModel>> sortedOrders = {};
 
-      // Перебираем каждую строку ответа Supabase.
       for (var order in rawResponse) {
-        // Преобразуем JSON строки БД в объект OrderModel.
         final orderModel = OrderModel.fromJson(order);
-
-        // Для курьера скрываем завершённые/отменённые/возвратные заказы.
-        if (role == 'courier') {
-          if (orderModel.status == 'Выдано' ||
-              orderModel.status == 'Отменено' ||
-              orderModel.status == 'Возврат') {
-            continue; // Пропускаем этот заказ, не добавляем в sortedOrders.
-          }
-        }
-
-        // Строка-ключ группы: «Название ПВЗ - Адрес».
         final String folderKey = "${orderModel.companyName} - ${orderModel.companyAddress}";
 
-        // ??= создаёт пустой список, если ключа folderKey ещё нет.
         sortedOrders[folderKey] ??= [];
-        // Добавляем заказ в список этой группы.
         sortedOrders[folderKey]!.add(orderModel);
       }
 
-      // Возвращаем сгруппированную карту вызывающему коду (HomeScreen).
       return sortedOrders;
     } catch (e) {
-      // Вывод ошибки в консоль разработчика.
       print("Error fetching orders: $e");
-      // Пробрасываем Exception, чтобы UI показал SnackBar.
       throw Exception('Failed to fetch orders: $e');
     }
   }
@@ -60,6 +46,7 @@ class DatabaseService {
       print('Order comment updated successfully');
     } catch (e) {
       print('Error updating order comment: $e');
+      rethrow;
     }
   }
 
@@ -71,6 +58,7 @@ class DatabaseService {
       print('Client payment updated successfully');
     } catch (e) {
       print('Error updating client payment: $e');
+      rethrow;
     }
   }
 
@@ -85,21 +73,24 @@ class DatabaseService {
       print('Order delayed successfully');
     } catch (e) {
       print('Error delaying order: $e');
+      rethrow;
     }
   }
 
   // Загружает файл в Storage bucket packages и пишет публичный URL в orders.url_photo.
   Future<String?> uploadOrderPhoto(String id, File imageFile) async {
     try {
-      final fileName = 'order_${id}_${DateTime.now().millisecondsSinceEpoch}.jpg';
-      await supabase.storage.from('packages').upload(
-            fileName,
-            imageFile,
-            fileOptions: const FileOptions(upsert: true),
-          );
+      // Жестко привязываем имя к ID заказа (без миллисекунд)
+      final fileName = 'order_$id.jpg';
 
-      final baseUrl =
-          supabase.storage.from('packages').getPublicUrl(fileName);
+      await supabase.storage.from('packages').upload(
+        fileName,
+        imageFile,
+        fileOptions: const FileOptions(upsert: true),
+      );
+
+      final baseUrl = supabase.storage.from('packages').getPublicUrl(fileName);
+      // Миллисекунды оставляем только в ссылке (URL), чтобы сбрасывать кэш картинок в приложении
       final publicUrl = '$baseUrl?t=${DateTime.now().millisecondsSinceEpoch}';
 
       await supabase
@@ -126,6 +117,7 @@ class DatabaseService {
       print('Order QR updated successfully');
     } catch (e) {
       print('Error updating order QR: $e');
+      rethrow;
     }
   }
 
@@ -140,6 +132,7 @@ class DatabaseService {
       print('Order photo cleared successfully');
     } catch (e) {
       print('Error clearing order photo: $e');
+      rethrow;
     }
   }
 
@@ -154,20 +147,18 @@ class DatabaseService {
       print('Order QR cleared successfully');
     } catch (e) {
       print('Error clearing order QR: $e');
+      rethrow;
     }
   }
 
   // Меняет статус заказа (например READY, SHIPPING — англ. в БД).
   Future<void> updateOrderStatus(String id, String status) async {
     try {
-      await supabase
-          .from('orders')
-          .update({'status': status})
-          .eq('id', id);
-
+      await supabase.from('orders').update({'status': status}).eq('id', id);
       print('Order status updated successfully');
     } catch (e) {
       print('Error updating order status: $e');
+      rethrow; // <-- ПРОСТО ДОБАВЬ ЭТУ СТРОКУ ВО ВСЕ ПОДОБНЫЕ МЕТОДЫ
     }
   }
 

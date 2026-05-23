@@ -259,7 +259,10 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ],
                 )
-          : const ChatScreen(),
+          : _ChatOrderListTab(
+              isLoading: _isLoading,
+              orders: _allOrders,
+            ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
         selectedItemColor: brandGreen,
@@ -294,6 +297,69 @@ class _HomeScreenState extends State<HomeScreen> {
               label: const Text('Заказ', style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold)),
             )
           : null,
+    );
+  }
+}
+
+class _ChatOrderListTab extends StatelessWidget {
+  final bool isLoading;
+  final Map<String, List<OrderModel>>? orders;
+
+  const _ChatOrderListTab({
+    required this.isLoading,
+    required this.orders,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    final allOrders =
+        orders?.values.expand((list) => list).toList(growable: false) ?? [];
+
+    if (allOrders.isEmpty) {
+      return const Center(
+        child: Text(
+          'Нет заказов для чата',
+          style: TextStyle(color: Colors.grey, fontSize: 16),
+        ),
+      );
+    }
+
+    allOrders.sort((a, b) => a.clientName.compareTo(b.clientName));
+
+    return ListView.separated(
+      padding: const EdgeInsets.all(16),
+      itemCount: allOrders.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 8),
+      itemBuilder: (context, index) {
+        final order = allOrders[index];
+        final shortId = order.id.length > 8
+            ? order.id.substring(0, 8).toUpperCase()
+            : order.id.toUpperCase();
+
+        return Card(
+          child: ListTile(
+            leading: const Icon(Icons.chat_bubble_outline),
+            title: Text(order.clientName),
+            subtitle: Text('APP - $shortId'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => ChatScreen(
+                    orderId: order.id,
+                    orderTitle: order.clientName,
+                  ),
+                ),
+              );
+            },
+          ),
+        );
+      },
     );
   }
 }

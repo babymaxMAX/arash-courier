@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:arash_curier/models/order_model.dart';
+import 'package:arash_curier/screens/chat_screen.dart';
 import 'package:arash_curier/dialogs/order_comment_dialog.dart';
 import 'package:arash_curier/dialogs/order_delay_dialog.dart';
 import 'package:arash_curier/dialogs/order_payment_dialog.dart';
@@ -28,6 +29,24 @@ class OrderBottomSheet {
                     fontWeight: FontWeight.w700,
                   ),
                 ),
+              ),
+              _SheetTile(
+                icon: Icons.chat_bubble_outline,
+                color: const Color(0xFF00897B),
+                title: 'Чат',
+                subtitle: 'Переписка по заказу',
+                onTap: () {
+                  Navigator.pop(ctx);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => ChatScreen(
+                        orderId: order.id,
+                        orderTitle: order.clientName,
+                      ),
+                    ),
+                  );
+                },
               ),
               _SheetTile(
                 icon: Icons.comment_rounded,

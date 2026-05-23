@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:arash_curier/models/order_model.dart';
 import 'package:arash_curier/services/database_service.dart';
+import 'package:arash_curier/screens/chat_screen.dart';
 import 'package:arash_curier/screens/qr_scanner_screen.dart';
 import 'package:arash_curier/dialogs/order_bottom_sheet.dart';
 import 'package:arash_curier/utils/status_style.dart';
@@ -85,6 +86,18 @@ class _OrderTileWidgetState extends State<OrderTileWidget> {
     await _run(
       () => DatabaseService().updatePvzQr(order.id, code),
       success: 'Штрих-код ПВЗ сохранён',
+    );
+  }
+
+  void _openChat() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ChatScreen(
+          orderId: order.id,
+          orderTitle: order.clientName,
+        ),
+      ),
     );
   }
 
@@ -244,6 +257,13 @@ class _OrderTileWidgetState extends State<OrderTileWidget> {
                 // Нижняя панель действий
                 Row(
                   children: [
+                    _MediaButton(
+                      icon: Icons.chat_bubble_outline,
+                      color: Colors.teal.shade600,
+                      isFilled: false,
+                      onTap: _openChat,
+                    ),
+                    const SizedBox(width: 8),
                     // Фото посылки
                     _MediaButton(
                       icon: hasPhoto ? Icons.image : Icons.add_a_photo,

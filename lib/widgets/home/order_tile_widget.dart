@@ -60,11 +60,11 @@ class _OrderTileWidgetState extends State<OrderTileWidget> {
     if (file == null) return;
     await _run(
       () => DatabaseService().uploadOrderPhoto(order.id, File(file.path)),
-      success: 'Фото прикреплено к заказу',
+      success: 'Фото прикреплено',
     );
   }
 
-  Future<void> _scanQr() async {
+  Future<void> _scanClientQr() async {
     final code = await Navigator.push<String>(
       context,
       MaterialPageRoute(builder: (context) => const QRScannerScreen()),
@@ -72,37 +72,84 @@ class _OrderTileWidgetState extends State<OrderTileWidget> {
     if (code == null || code.isEmpty) return;
     await _run(
       () => DatabaseService().updateOrderQr(order.id, code),
-      success: 'QR сохранён',
+      success: 'Штрих-код клиента сохранён',
+    );
+  }
+  
+  Future<void> _scanPvzQr() async {
+    final code = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(builder: (context) => const QRScannerScreen()),
+    );
+    if (code == null || code.isEmpty) return;
+    await _run(
+      () => DatabaseService().updatePvzQr(order.id, code),
+      success: 'Штрих-код ПВЗ сохранён',
+    );
+  }
+
+  void _showBottomSheet() {
+    if (_busy) return;
+    OrderBottomSheet.show(
+      context,
+      order: order,
+      onRefresh: widget.onRefresh,
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final isDone = order.status == 'Готово';
+    final isDelayed = order.status == 'Отложено';
     final hasPhoto = order.urlPhoto.isNotEmpty;
-    final hasQr = order.clientQrCode.isNotEmpty;
+    final hasClientQr = order.clientQrCode.isNotEmpty;
+    final hasPvzQr = order.pvzQrCode.isNotEmpty;
+
+    // Генерируем короткий ID для визуала (APP - ###)
+    final shortId = order.id.length > 8 ? order.id.substring(0, 8).toUpperCase() : order.id.toUpperCase();
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       child: Material(
-        color: isDone
-            ? const Color(0xFFF1F8E9)
-            : Colors.grey.shade50,
-        borderRadius: BorderRadius.circular(14),
+        color: isDone ? const Color(0xFFF1F8E9) : (isDelayed ? Colors.grey.shade100 : Colors.white),
+        borderRadius: BorderRadius.circular(16),
+        elevation: isDone ? 0 : 2,
+        shadowColor: Colors.black.withValues(alpha: 0.05),
         child: InkWell(
-          borderRadius: BorderRadius.circular(14),
-          onTap: _busy
-              ? null
-              : () => OrderBottomSheet.show(
-                    context,
-                    order: order,
-                    onRefresh: widget.onRefresh,
-                  ),
+          borderRadius: BorderRadius.circular(16),
+          onDoubleTap: _showBottomSheet, // Вызов меню по двойному тапу (по ТЗ)
+          onTap: _showBottomSheet,       // Оставил и одинарный тап для удобства курьера
           child: Padding(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Шапка карточки: Иконка источника + ID + Колокольчик
+                Row(
+                  children: [
+                    Icon(Icons.smart_toy_outlined, size: 16, color: Colors.grey.shade500),
+                    const SizedBox(width: 6),
+                    Text(
+                      'APP - $shortId',
+                      style: TextStyle(fontSize: 12, color: Colors.grey.shade600, fontWeight: FontWeight.w600),
+                    ),
+                    const Spacer(),
+                    if (isDelayed)
+                      const Padding(
+                        padding: EdgeInsets.only(right: 8.0),
+                        child: Icon(Icons.notifications_active, color: Colors.red, size: 20),
+                      ),
+                    IconButton(
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      icon: Icon(Icons.more_horiz_rounded, color: Colors.grey.shade500),
+                      onPressed: _showBottomSheet,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                
+                // Основное тело карточки: Статус, ФИО, Город, Оплата
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -112,34 +159,18 @@ class _OrderTileWidgetState extends State<OrderTileWidget> {
                         width: 44,
                         height: 44,
                         decoration: BoxDecoration(
-                          color: isDone
-                              ? const Color(0xFF43A047)
-                              : const Color(0xFFE65100),
+                          color: isDone ? const Color(0xFF43A047) : Colors.grey.shade200,
                           borderRadius: BorderRadius.circular(12),
-                          boxShadow: [
-                            BoxShadow(
-                              color: (isDone
-                                      ? const Color(0xFF43A047)
-                                      : const Color(0xFFE65100))
-                                  .withValues(alpha: 0.35),
-                              blurRadius: 8,
-                              offset: const Offset(0, 3),
-                            ),
-                          ],
+                          border: isDone ? null : Border.all(color: Colors.grey.shade300),
                         ),
                         child: _busy
                             ? const Padding(
-                                padding: EdgeInsets.all(10),
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
-                                ),
+                                padding: EdgeInsets.all(12),
+                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                               )
                             : Icon(
-                                isDone
-                                    ? Icons.check_rounded
-                                    : Icons.local_shipping_rounded,
-                                color: Colors.white,
+                                isDone ? Icons.check_rounded : Icons.check_box_outline_blank,
+                                color: isDone ? Colors.white : Colors.grey.shade500,
                               ),
                       ),
                     ),
@@ -151,123 +182,93 @@ class _OrderTileWidgetState extends State<OrderTileWidget> {
                           Text(
                             order.clientName,
                             style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700,
-                              decoration: isDone
-                                  ? TextDecoration.lineThrough
-                                  : null,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
+                              decoration: isDone ? TextDecoration.lineThrough : null,
                               color: const Color(0xFF1A1A2E),
                             ),
                           ),
-                          const SizedBox(height: 6),
-                          buildStatusChip(order.status),
-                          if (order.comment != null &&
-                              order.comment!.isNotEmpty) ...[
-                            const SizedBox(height: 6),
-                            Text(
-                              order.comment!,
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey.shade700,
-                                fontStyle: FontStyle.italic,
-                              ),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
+                          const SizedBox(height: 4),
+                          Text(
+                            order.deliveryCity.isNotEmpty ? order.deliveryCity : 'Город не указан',
+                            style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
+                          ),
                         ],
                       ),
                     ),
-                    Icon(
-                      Icons.more_horiz_rounded,
-                      color: Colors.grey.shade500,
-                    ),
-                  ],
-                ),
-                if (hasPhoto) ...[
-                  const SizedBox(height: 12),
-                  _PhotoAttachment(
-                    url: order.urlPhoto,
-                    onDelete: _busy
-                        ? null
-                        : () => _run(
-                              () => DatabaseService()
-                                  .clearOrderPhoto(order.id),
-                              success: 'Фото удалено',
-                            ),
-                  ),
-                ],
-                if (hasQr) ...[
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFE3F2FD),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.qr_code_2, size: 16, color: Color(0xFF1565C0)),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: Text(
-                            order.clientQrCode,
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: Color(0xFF1565C0),
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                    // Желтый бейдж оплаты из ТЗ
+                    if (order.clientPayment > 0)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.amber.shade100,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.amber.shade300),
+                        ),
+                        child: Text(
+                          '${order.clientPayment.toStringAsFixed(0)} ₽',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.amber.shade900,
                           ),
                         ),
-                      ],
+                      ),
+                  ],
+                ),
+                
+                // Плашка комментария (Желтая, если есть текст)
+                if (order.comment != null && order.comment!.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.amber.shade200),
+                    ),
+                    child: Text(
+                      order.comment!,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.amber.shade900,
+                        fontStyle: FontStyle.italic,
+                      ),
                     ),
                   ),
                 ],
-                const SizedBox(height: 10),
+
+                const SizedBox(height: 16),
+                
+                // Нижняя панель действий
                 Row(
                   children: [
-                    _ActionChip(
-                      icon: Icons.camera_alt_rounded,
-                      label: hasPhoto ? 'Заменить' : 'Фото',
-                      color: const Color(0xFF2E7D32),
-                      onTap: _busy ? null : _pickPhoto,
+                    // Фото посылки
+                    _MediaButton(
+                      icon: hasPhoto ? Icons.image : Icons.add_a_photo,
+                      color: hasPhoto ? Colors.green.shade700 : Colors.green.shade500,
+                      isFilled: hasPhoto,
+                      onTap: _pickPhoto,
                     ),
                     const SizedBox(width: 8),
-                    _ActionChip(
-                      icon: Icons.qr_code_scanner_rounded,
-                      label: 'QR',
-                      color: const Color(0xFF1565C0),
-                      onTap: _busy ? null : _scanQr,
+                    // QR Клиента (синяя пленка)
+                    _MediaButton(
+                      icon: Icons.qr_code_scanner,
+                      color: hasClientQr ? Colors.blue.shade700 : Colors.blue.shade500,
+                      isFilled: hasClientQr,
+                      onTap: _scanClientQr,
                     ),
-                    if (hasQr) ...[
-                      const SizedBox(width: 8),
-                      _ActionChip(
-                        icon: Icons.delete_outline_rounded,
-                        label: 'Удалить QR',
-                        color: const Color(0xFFC62828),
-                        onTap: _busy
-                            ? null
-                            : () => _run(
-                                  () => DatabaseService()
-                                      .clearOrderQr(order.id),
-                                  success: 'QR удалён',
-                                ),
-                      ),
-                    ],
-                    if (order.totalAmount > 0) ...[
-                      const Spacer(),
-                      Text(
-                        '${order.totalAmount.toStringAsFixed(0)} ₽',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFFE65100),
-                        ),
-                      ),
-                    ],
+                    const SizedBox(width: 8),
+                    // QR ПВЗ / Адлер (зеленая пленка)
+                    _MediaButton(
+                      icon: Icons.inventory_2_outlined,
+                      color: hasPvzQr ? Colors.green.shade700 : Colors.green.shade500,
+                      isFilled: hasPvzQr,
+                      onTap: _scanPvzQr,
+                    ),
+                    const Spacer(),
+                    buildStatusChip(order.status),
                   ],
                 ),
               ],
@@ -279,125 +280,36 @@ class _OrderTileWidgetState extends State<OrderTileWidget> {
   }
 }
 
-class _PhotoAttachment extends StatelessWidget {
-  final String url;
-  final VoidCallback? onDelete;
-
-  const _PhotoAttachment({required this.url, this.onDelete});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFF2E7D32).withValues(alpha: 0.3)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(10, 8, 10, 0),
-            child: Row(
-              children: [
-                Icon(Icons.photo_library_rounded,
-                    size: 16, color: Colors.green.shade700),
-                const SizedBox(width: 6),
-                Text(
-                  'Фото заказа',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.green.shade800,
-                  ),
-                ),
-                const Spacer(),
-                if (onDelete != null)
-                  IconButton(
-                    visualDensity: VisualDensity.compact,
-                    icon: const Icon(Icons.close, size: 18),
-                    onPressed: onDelete,
-                    tooltip: 'Удалить фото',
-                  ),
-              ],
-            ),
-          ),
-          ClipRRect(
-            borderRadius: const BorderRadius.vertical(bottom: Radius.circular(11)),
-            child: Image.network(
-              url,
-              height: 140,
-              width: double.infinity,
-              fit: BoxFit.cover,
-              loadingBuilder: (context, child, progress) {
-                if (progress == null) return child;
-                return Container(
-                  height: 140,
-                  color: Colors.grey.shade200,
-                  child: const Center(child: CircularProgressIndicator()),
-                );
-              },
-              errorBuilder: (_, __, ___) => Container(
-                height: 140,
-                color: Colors.grey.shade200,
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.broken_image_outlined,
-                        color: Colors.grey.shade500, size: 40),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Не удалось загрузить фото',
-                      style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ActionChip extends StatelessWidget {
+// Вспомогательный класс для отрисовки квадратных кнопок внизу
+class _MediaButton extends StatelessWidget {
   final IconData icon;
-  final String label;
   final Color color;
-  final VoidCallback? onTap;
+  final bool isFilled;
+  final VoidCallback onTap;
 
-  const _ActionChip({
+  const _MediaButton({
     required this.icon,
-    required this.label,
     required this.color,
-    this.onTap,
+    required this.isFilled,
+    required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: color.withValues(alpha: 0.12),
-      borderRadius: BorderRadius.circular(10),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(10),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 18, color: color),
-              const SizedBox(width: 4),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: color,
-                ),
-              ),
-            ],
-          ),
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          color: isFilled ? color : color.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(10),
+          border: isFilled ? null : Border.all(color: color.withValues(alpha: 0.5)),
+        ),
+        child: Icon(
+          icon,
+          color: isFilled ? Colors.white : color,
+          size: 20,
         ),
       ),
     );

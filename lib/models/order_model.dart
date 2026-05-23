@@ -1,33 +1,32 @@
 // Immutable-модель одного заказа курьера (данные из Supabase / UI).
 class OrderModel {
-  final String id; // UUID или строковый id строки в таблице orders.
-  final DateTime dateCreated; // Когда заказ создан (сортировка «новые сверху»).
-  final DateTime dateUpdated; // Последнее изменение (конфликты синхронизации).
+  final String id;
+  final DateTime dateCreated;
+  final DateTime dateUpdated;
 
-  final String companyName; // Название ПВЗ / компании-отправителя.
-  final String companyAddress; // Адрес точки выдачи / сбора.
-  final String responsiblePerson; // Курьер или менеджер, закреплённый за адресом.
+  final String companyName;
+  final String companyAddress;
+  final String responsiblePerson;
 
-  final String clientName; // ФИО или имя получателя.
-  final String deliveryCity; // Город доставки (группировка на HomeScreen).
+  final String clientName;
+  final String deliveryCity;
 
-  final String pvzQrCode; // QR со склада / ПВЗ (текст или URL).
-  final String clientQrCode; // QR, отсканированный у клиента.
-  final String urlPhoto; // Публичная ссылка на фото посылки в Storage.
+  final String pvzQrCode;
+  final String clientQrCode;
+  final String urlPhoto;
 
-  final String status; // Статус на русском после _translateStatus.
-  final String? comment; // Заметка курьера (может быть null).
-  final String? cancelReason; // Причина отмены/отложения (может быть null).
+  final String status;
+  final String? comment;
+  final String? cancelReason;
 
-  final double clientPayment; // Сумма оплаты за товар.
-  final double debtAmount; // Долг клиента.
-  final double deliveryPrice; // Стоимость доставки.
-  final double pointsDeduction; // Списание бонусных баллов.
+  final double clientPayment;
+  final double debtAmount;
+  final double deliveryPrice;
+  final double pointsDeduction;
 
-  // Итог к оплате: товар + долг + доставка − баллы.
-  double get totalAmount => (clientPayment + debtAmount + deliveryPrice) - pointsDeduction;
+  double get totalAmount =>
+      (clientPayment + debtAmount + deliveryPrice) - pointsDeduction;
 
-  // Именованный конструктор: все обязательные поля через required.
   OrderModel({
     required this.id,
     required this.dateCreated,
@@ -49,7 +48,6 @@ class OrderModel {
     required this.pointsDeduction,
   });
 
-  // Копия объекта с подстановкой только переданных полей (остальные из this).
   OrderModel copyWith({
     String? id,
     DateTime? dateCreated,
@@ -92,16 +90,17 @@ class OrderModel {
     );
   }
 
-  // Фабрика: создаёт OrderModel из Map (строка JSON из PostgREST).
   factory OrderModel.fromJson(Map<String, dynamic> json) {
     return OrderModel(
-      id: json['id'] ?? 'ОШИБКА_ID',
+      id: json['id']?.toString() ?? 'ОШИБКА_ID',
       dateCreated: json['date_created'] != null
           ? DateTime.parse(json['date_created'])
           : DateTime.now(),
       dateUpdated: json['updated_at'] != null
           ? DateTime.parse(json['updated_at'])
-          : DateTime.now(),
+          : (json['date_updated'] != null
+              ? DateTime.parse(json['date_updated'])
+              : DateTime.now()),
       companyName: json['company_name'] ?? 'Неизвестная компания',
       companyAddress: json['company_address'] ?? 'Адрес не указан',
       responsiblePerson: json['responsible_person'] ?? '',
@@ -110,7 +109,7 @@ class OrderModel {
       pvzQrCode: json['pvz_qr_code'] ?? '',
       clientQrCode: json['client_qr_code'] ?? '',
       urlPhoto: json['url_photo'] ?? '',
-      status: _translateStatus(json['status'] ?? 'New'),
+      status: _translateStatus(json['status']?.toString() ?? 'New'),
       comment: json['comment'],
       cancelReason: json['cancel_reason'],
       clientPayment: (json['client_payment'] as num?)?.toDouble() ?? 0.0,
@@ -120,7 +119,6 @@ class OrderModel {
     );
   }
 
-  // Переводит английские коды статуса из БД в русские подписи для UI.
   static String _translateStatus(String englishStatus) {
     switch (englishStatus.toUpperCase()) {
       case 'READY':
@@ -153,14 +151,15 @@ class OrderModel {
       case 'POSTPONED':
         return 'Отложено';
       default:
-        if (englishStatus == 'Готово' || englishStatus == 'Отложено' || englishStatus == 'Новый') {
+        if (englishStatus == 'Готово' ||
+            englishStatus == 'Отложено' ||
+            englishStatus == 'Новый') {
           return englishStatus;
         }
         return englishStatus;
     }
   }
 
-  // Обратное преобразование модели в Map для insert/update в Supabase.
   Map<String, dynamic> toJson() {
     return {
       'id': id,

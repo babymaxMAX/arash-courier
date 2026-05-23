@@ -4,6 +4,7 @@ import 'package:arash_curier/services/database_service.dart';
 import 'package:arash_curier/services/auth_service.dart';
 import 'package:arash_curier/screens/login_screen.dart';
 import 'package:arash_curier/screens/add_order_screen.dart';
+import 'package:arash_curier/screens/chat_screen.dart';
 import 'package:arash_curier/utils/order_grouping.dart';
 import 'package:arash_curier/utils/app_snackbar.dart';
 import 'package:arash_curier/widgets/home/pvz_folder_card.dart';
@@ -21,6 +22,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Map<String, List<OrderModel>>? _allOrders;
   bool _isLoading = true;
   String _userRole = 'courier';
+  int _currentIndex = 0; // Индекс для нижнего меню
 
   int get _totalOrders {
     final orders = _allOrders;
@@ -118,127 +120,171 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final filtered = filterOrdersBySearch(_allOrders ?? {}, _searchQuery);
-    final folderCount = filtered.length;
-    final orderCount = filtered.values.fold(0, (s, l) => s + l.length);
+
+    // Цвет бренда ПВЗ из ТЗ
+    const Color brandGreen = Color(0xFF2E7D32);
 
     return Scaffold(
+      backgroundColor: const Color(0xFFF5F5F5),
       appBar: AppBar(
-        title: Column(
+        backgroundColor: brandGreen,
+        foregroundColor: Colors.white,
+        elevation: 0,
+        title: const Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Arash Courier'),
-            if (!_isLoading)
-              Text(
-                '$orderCount заказов · $folderCount ПВЗ',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w400,
-                  color: Colors.grey.shade600,
-                ),
-              ),
+            Text('ARASH COURIER', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+            Text('Смена открыта', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w400, color: Colors.white70)),
           ],
         ),
         actions: [
           IconButton(
+            icon: const Badge(
+              label: Text('2'),
+              backgroundColor: Colors.red,
+              child: Icon(Icons.notifications_none, color: Colors.white),
+            ),
+            onPressed: () {
+              // Будущий экран уведомлений
+            },
+          ),
+          IconButton(
             onPressed: _isLoading ? null : _refreshOrders,
-            icon: const Icon(Icons.refresh_rounded),
+            icon: const Icon(Icons.refresh_rounded, color: Colors.white),
             tooltip: 'Обновить',
           ),
           IconButton(
             onPressed: _confirmLogout,
-            icon: const Icon(Icons.logout_rounded),
+            icon: const Icon(Icons.exit_to_app, color: Colors.white),
             tooltip: 'Выйти',
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _openAddOrder,
-        icon: const Icon(Icons.add_rounded),
-        label: const Text('Заказ'),
-      ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : Column(
-              children: [
-                _StatsBanner(
-                  totalOrders: _totalOrders,
-                  folderCount: _allOrders?.length ?? 0,
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                  child: TextField(
-                    controller: _searchController,
-                    decoration: InputDecoration(
-                      hintText: 'Клиент, ПВЗ или адрес...',
-                      prefixIcon: const Icon(Icons.search_rounded),
-                      suffixIcon: _searchQuery.isNotEmpty
-                          ? IconButton(
-                              icon: const Icon(Icons.clear_rounded),
-                              onPressed: () {
-                                _searchController.clear();
-                                setState(() => _searchQuery = '');
-                              },
-                            )
-                          : null,
+      body: _currentIndex == 0
+          ? _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : Column(
+                  children: [
+                    _StatsBanner(
+                      totalOrders: _totalOrders,
+                      folderCount: _allOrders?.length ?? 0,
                     ),
-                    onChanged: (value) {
-                      setState(() => _searchQuery = value.toLowerCase());
-                    },
-                  ),
-                ),
-                Expanded(
-                  child: filtered.isEmpty
-                      ? RefreshIndicator(
-                          onRefresh: _refreshOrders,
-                          child: ListView(
-                            physics: const AlwaysScrollableScrollPhysics(),
-                            children: [
-                              SizedBox(
-                                height: MediaQuery.of(context).size.height * 0.35,
-                                child: Center(
-                                  child: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(Icons.inbox_outlined,
-                                          size: 64, color: Colors.grey.shade400),
-                                      const SizedBox(height: 12),
-                                      Text(
-                                        _searchQuery.isEmpty
-                                            ? 'Нет заказов'
-                                            : 'Ничего не найдено',
-                                        style: TextStyle(
-                                          fontSize: 16,
-                                          color: Colors.grey.shade600,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ],
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                      child: TextField(
+                        controller: _searchController,
+                        decoration: InputDecoration(
+                          hintText: 'Клиент, ПВЗ или адрес...',
+                          fillColor: Colors.white,
+                          filled: true,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none,
                           ),
-                        )
-                      : RefreshIndicator(
-                          onRefresh: _refreshOrders,
-                          child: ListView.builder(
-                            physics: const AlwaysScrollableScrollPhysics(),
-                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 88),
-                            itemCount: filtered.keys.length,
-                            itemBuilder: (context, index) {
-                              final keys = filtered.keys.toList()..sort();
-                              final folderKey = keys[index];
-                              final orders = sortOrders(filtered[folderKey]!);
-                              return PvzFolderCard(
-                                folderKey: folderKey,
-                                orders: orders,
-                                onRefresh: _refreshOrders,
-                              );
-                            },
-                          ),
+                          prefixIcon: const Icon(Icons.search_rounded),
+                          suffixIcon: _searchQuery.isNotEmpty
+                              ? IconButton(
+                                  icon: const Icon(Icons.clear_rounded),
+                                  onPressed: () {
+                                    _searchController.clear();
+                                    setState(() => _searchQuery = '');
+                                  },
+                                )
+                              : null,
                         ),
-                ),
-              ],
+                        onChanged: (value) {
+                          setState(() => _searchQuery = value.toLowerCase());
+                        },
+                      ),
+                    ),
+                    Expanded(
+                      child: filtered.isEmpty
+                          ? RefreshIndicator(
+                              onRefresh: _refreshOrders,
+                              child: ListView(
+                                physics: const AlwaysScrollableScrollPhysics(),
+                                children: [
+                                  SizedBox(
+                                    height: MediaQuery.of(context).size.height * 0.35,
+                                    child: Center(
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(Icons.inbox_outlined,
+                                              size: 64, color: Colors.grey.shade400),
+                                          const SizedBox(height: 12),
+                                          Text(
+                                            _searchQuery.isEmpty
+                                                ? 'Нет заказов'
+                                                : 'Ничего не найдено',
+                                            style: TextStyle(
+                                              fontSize: 16,
+                                              color: Colors.grey.shade600,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            )
+                          : RefreshIndicator(
+                              onRefresh: _refreshOrders,
+                              child: ListView.builder(
+                                physics: const AlwaysScrollableScrollPhysics(),
+                                padding: const EdgeInsets.fromLTRB(16, 0, 16, 88),
+                                itemCount: filtered.keys.length,
+                                itemBuilder: (context, index) {
+                                  final keys = filtered.keys.toList()..sort();
+                                  final folderKey = keys[index];
+                                  final orders = sortOrders(filtered[folderKey]!);
+                                  return PvzFolderCard(
+                                    folderKey: folderKey,
+                                    orders: orders,
+                                    onRefresh: _refreshOrders,
+                                  );
+                                },
+                              ),
+                            ),
+                    ),
+                  ],
+                )
+          : const ChatScreen(),
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _currentIndex,
+        selectedItemColor: brandGreen,
+        backgroundColor: Colors.white,
+        elevation: 8,
+        onTap: (index) {
+          setState(() {
+            _currentIndex = index;
+          });
+        },
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.inventory_2_outlined),
+            activeIcon: Icon(Icons.inventory_2),
+            label: 'Заявки',
+          ),
+          BottomNavigationBarItem(
+            icon: Badge(
+              label: Text('1'),
+              child: Icon(Icons.chat_bubble_outline),
             ),
+            activeIcon: Icon(Icons.chat_bubble),
+            label: 'Чат',
+          ),
+        ],
+      ),
+      floatingActionButton: _currentIndex == 0
+          ? FloatingActionButton.extended(
+              onPressed: _openAddOrder,
+              backgroundColor: Colors.amber[700],
+              icon: const Icon(Icons.add_rounded, color: Colors.black87),
+              label: const Text('Заказ', style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold)),
+            )
+          : null,
     );
   }
 }

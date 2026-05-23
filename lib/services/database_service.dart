@@ -106,6 +106,21 @@ class DatabaseService {
     }
   }
 
+  // UPDATE pvz_qr_code после сканирования штрих-кода ПВЗ / Адлер.
+  Future<void> updatePvzQr(String id, String qrCode) async {
+    try {
+      await supabase
+          .from('orders')
+          .update({'pvz_qr_code': qrCode})
+          .eq('id', id);
+
+      print('Order PVZ QR updated successfully');
+    } catch (e) {
+      print('Error updating PVZ QR: $e');
+      rethrow;
+    }
+  }
+
   // UPDATE client_qr_code после сканирования QR на экране курьера.
   Future<void> updateOrderQr(String id, String qrCode) async {
     try {

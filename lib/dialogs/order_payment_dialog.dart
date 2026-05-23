@@ -6,49 +6,62 @@ class OrderPaymentDialog {
   static Future<void> show(
     BuildContext context, {
     required String orderId,
-    required double initialAmount,
+    required double initialAmount, // Текущая сумма оплаты
     required VoidCallback onSaved,
   }) async {
-    final controller =
-        TextEditingController(text: initialAmount.toString());
+    final controller = TextEditingController();
 
     await showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Оплата клиента'),
+        title: const Text('Добавить оплату'),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        content: TextField(
-          controller: controller,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: const InputDecoration(
-            labelText: 'Сумма (₽)',
-            prefixIcon: Icon(Icons.payments_outlined),
-          ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (initialAmount > 0)
+              Text('Уже оплачено: ${initialAmount.toStringAsFixed(0)} ₽', 
+                   style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
+            const SizedBox(height: 16),
+            TextField(
+              controller: controller,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              autofocus: true,
+              decoration: InputDecoration(
+                labelText: 'Новая сумма (₽)',
+                prefixIcon: const Icon(Icons.payments_outlined),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+          ],
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
             child: const Text('Отмена'),
           ),
-          FilledButton(
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blue.shade700, 
+              foregroundColor: Colors.white,
+            ),
             onPressed: () async {
-              final amount = double.tryParse(controller.text.trim());
-              if (amount == null) {
-                showAppSnackBar(context, 'Введите число', isError: true);
+              final newAmount = double.tryParse(controller.text.replaceAll(',', '.'));
+              if (newAmount == null || newAmount <= 0) {
+                showAppSnackBar(context, 'Введите корректную сумму', isError: true);
                 return;
               }
+              // Суммируем старую и новую оплату строго по ТЗ
+              final totalAmount = initialAmount + newAmount;
+
               try {
-                await DatabaseService()
-                    .updateClientPayment(orderId, amount);
-                if (ctx.mounted) Navigator.pop(ctx);
-                if (context.mounted) {
-                  showAppSnackBar(context, 'Оплата обновлена');
-                  onSaved();
-                }
+                await DatabaseService().updateClientPayment(orderId, totalAmount);
+                if (!context.mounted) return;
+                Navigator.pop(ctx);
+                onSaved();
               } catch (e) {
-                if (context.mounted) {
-                  showAppSnackBar(context, 'Ошибка', isError: true);
-                }
+                showAppSnackBar(context, 'Ошибка: $e', isError: true);
               }
             },
             child: const Text('Сохранить'),

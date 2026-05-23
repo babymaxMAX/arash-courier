@@ -1,19 +1,33 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:isar/isar.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
 import 'package:arash_curier/models/order_model.dart';
 import 'package:arash_curier/models/sync_task.dart';
-import 'package:arash_curier/services/isar_service.dart' show isar, syncService;
+import 'package:arash_curier/services/isar_service.dart' as isar_svc;
 import 'package:arash_curier/services/sync_service.dart';
 
-/// CRUD заказов: онлайн — Supabase, офлайн — очередь SyncService.
+/// Умный посредник: онлайн — Supabase, офлайн — очередь SyncService + локальный Isar.
 class DatabaseService {
-  final supabase = Supabase.instance.client;
-  SyncService get _sync => syncService;
+  final SupabaseClient supabase = Supabase.instance.client;
+  final Isar isar;
+  final SyncService _sync;
+
+  /// Без аргумента использует глобальный [isar] (после [initIsar]).
+  DatabaseService([Isar? isarInstance, SyncService? sync])
+      : isar = isarInstance ?? isar_svc.isar,
+        _sync = sync ?? isar_svc.syncService;
+
+  Future<bool> _isOnline() async {
+    final connectivityResult = await Connectivity().checkConnectivity();
+    return connectivityResult.any((r) => r != ConnectivityResult.none);
+  }
 
   Future<Map<String, List<OrderModel>>> fetchAndSortOrders(String role) async {
-    if (await _sync.isOnline) {
+    if (await _isOnline()) {
       try {
         var query = supabase.from('orders').select();
 
@@ -55,135 +69,186 @@ class DatabaseService {
     return cached;
   }
 
-  /// Онлайн — сразу в Supabase; офлайн или ошибка — в очередь.
-  Future<void> _syncMutation({
-    required String orderId,
-    required String actionType,
-    required Map<String, dynamic> payload,
-    required Future<void> Function() applyLocal,
-  }) async {
-    await applyLocal();
+  Future<void> updateOrderStatus(String id, String status) async {
+    await _sync.applyLocalOrderPatch(id, (o) => o.status = status);
+    final payload = jsonEncode({'status': status});
 
-    final jsonPayload = jsonEncode(payload);
-
-    if (await _sync.isOnline) {
+    if (await _isOnline()) {
       try {
-        await _sync.executeAction(actionType, orderId, jsonPayload);
+        await supabase.from('orders').update({'status': status}).eq('id', id);
         return;
-      } catch (_) {
-        // Сеть есть, но запрос не прошёл — кладём в очередь
+      } catch (e) {
+        await _sync.addTask(SyncActionType.updateStatus, id, payload);
+        rethrow;
       }
     }
 
-    await _sync.addTask(actionType, orderId, jsonPayload);
+    await _sync.addTask(SyncActionType.updateStatus, id, payload);
   }
 
   Future<void> updateOrderComment(String id, String text) async {
-    await _syncMutation(
-      orderId: id,
-      actionType: SyncActionType.updateComment,
-      payload: {'comment': text},
-      applyLocal: () => _sync.applyLocalOrderPatch(id, (o) => o.comment = text),
-    );
+    await _sync.applyLocalOrderPatch(id, (o) => o.comment = text);
+    final payload = jsonEncode({'comment': text});
+
+    if (await _isOnline()) {
+      try {
+        await supabase.from('orders').update({'comment': text}).eq('id', id);
+        return;
+      } catch (e) {
+        await _sync.addTask(SyncActionType.updateComment, id, payload);
+        rethrow;
+      }
+    }
+
+    await _sync.addTask(SyncActionType.updateComment, id, payload);
   }
 
   Future<void> updateClientPayment(String id, double amount) async {
-    await _syncMutation(
-      orderId: id,
-      actionType: SyncActionType.updatePayment,
-      payload: {'amount': amount},
-      applyLocal: () =>
-          _sync.applyLocalOrderPatch(id, (o) => o.clientPayment = amount),
-    );
+    await _sync.applyLocalOrderPatch(id, (o) => o.clientPayment = amount);
+    final payload = jsonEncode({'amount': amount});
+
+    if (await _isOnline()) {
+      try {
+        await supabase
+            .from('orders')
+            .update({'client_payment': amount})
+            .eq('id', id);
+        return;
+      } catch (e) {
+        await _sync.addTask(SyncActionType.updatePayment, id, payload);
+        rethrow;
+      }
+    }
+
+    await _sync.addTask(SyncActionType.updatePayment, id, payload);
   }
 
   Future<void> delayOrder(String id, String reason) async {
-    await _syncMutation(
-      orderId: id,
-      actionType: SyncActionType.delayOrder,
-      payload: {'reason': reason},
-      applyLocal: () => _sync.applyLocalOrderPatch(id, (o) {
-        o.status = 'Отложено';
-        o.cancelReason = reason;
-      }),
-    );
+    await _sync.applyLocalOrderPatch(id, (o) {
+      o.status = 'Отложено';
+      o.cancelReason = reason;
+    });
+    final payload = jsonEncode({'reason': reason});
+
+    if (await _isOnline()) {
+      try {
+        await supabase.from('orders').update({
+          'status': 'delayed',
+          'cancel_reason': reason,
+        }).eq('id', id);
+        return;
+      } catch (e) {
+        await _sync.addTask(SyncActionType.delayOrder, id, payload);
+        rethrow;
+      }
+    }
+
+    await _sync.addTask(SyncActionType.delayOrder, id, payload);
   }
 
   Future<String?> uploadOrderPhoto(String id, File imageFile) async {
     final localPath = imageFile.path;
-    final payload = {'localPath': localPath};
-
     await _sync.applyLocalOrderPatch(id, (o) => o.urlPhoto = localPath);
+    final payload = jsonEncode({'localPath': localPath});
 
-    if (await _sync.isOnline) {
+    if (await _isOnline()) {
       try {
-        await _sync.executeAction(
-          SyncActionType.addPhoto,
-          id,
-          jsonEncode(payload),
-        );
-        final row = await supabase
-            .from('orders')
-            .select('url_photo')
-            .eq('id', id)
-            .maybeSingle();
-        return row?['url_photo'] as String?;
-      } catch (_) {
-        await _sync.addTask(SyncActionType.addPhoto, id, jsonEncode(payload));
+        final fileName = 'order_$id.jpg';
+        await supabase.storage.from('packages').upload(
+              fileName,
+              imageFile,
+              fileOptions: const FileOptions(upsert: true),
+            );
+        final baseUrl =
+            supabase.storage.from('packages').getPublicUrl(fileName);
+        final url = '$baseUrl?t=${DateTime.now().millisecondsSinceEpoch}';
+        await supabase.from('orders').update({'url_photo': url}).eq('id', id);
+        return url;
+      } catch (e) {
+        await _sync.addTask(SyncActionType.addPhoto, id, payload);
         return localPath;
       }
     }
 
-    await _sync.addTask(SyncActionType.addPhoto, id, jsonEncode(payload));
+    await _sync.addTask(SyncActionType.addPhoto, id, payload);
     return localPath;
   }
 
   Future<void> updatePvzQr(String id, String qrCode) async {
-    await _syncMutation(
-      orderId: id,
-      actionType: SyncActionType.updatePvzQr,
-      payload: {'qrCode': qrCode},
-      applyLocal: () =>
-          _sync.applyLocalOrderPatch(id, (o) => o.pvzQrCode = qrCode),
-    );
+    await _sync.applyLocalOrderPatch(id, (o) => o.pvzQrCode = qrCode);
+    final payload = jsonEncode({'qrCode': qrCode});
+
+    if (await _isOnline()) {
+      try {
+        await supabase
+            .from('orders')
+            .update({'pvz_qr_code': qrCode})
+            .eq('id', id);
+        return;
+      } catch (e) {
+        await _sync.addTask(SyncActionType.updatePvzQr, id, payload);
+        rethrow;
+      }
+    }
+
+    await _sync.addTask(SyncActionType.updatePvzQr, id, payload);
   }
 
   Future<void> updateOrderQr(String id, String qrCode) async {
-    await _syncMutation(
-      orderId: id,
-      actionType: SyncActionType.updateClientQr,
-      payload: {'qrCode': qrCode},
-      applyLocal: () =>
-          _sync.applyLocalOrderPatch(id, (o) => o.clientQrCode = qrCode),
-    );
+    await _sync.applyLocalOrderPatch(id, (o) => o.clientQrCode = qrCode);
+    final payload = jsonEncode({'qrCode': qrCode});
+
+    if (await _isOnline()) {
+      try {
+        await supabase
+            .from('orders')
+            .update({'client_qr_code': qrCode})
+            .eq('id', id);
+        return;
+      } catch (e) {
+        await _sync.addTask(SyncActionType.updateClientQr, id, payload);
+        rethrow;
+      }
+    }
+
+    await _sync.addTask(SyncActionType.updateClientQr, id, payload);
   }
 
   Future<void> clearOrderPhoto(String id) async {
-    await _syncMutation(
-      orderId: id,
-      actionType: SyncActionType.clearPhoto,
-      payload: {},
-      applyLocal: () => _sync.applyLocalOrderPatch(id, (o) => o.urlPhoto = ''),
-    );
+    await _sync.applyLocalOrderPatch(id, (o) => o.urlPhoto = '');
+    const payload = '{}';
+
+    if (await _isOnline()) {
+      try {
+        await supabase.from('orders').update({'url_photo': ''}).eq('id', id);
+        return;
+      } catch (e) {
+        await _sync.addTask(SyncActionType.clearPhoto, id, payload);
+        rethrow;
+      }
+    }
+
+    await _sync.addTask(SyncActionType.clearPhoto, id, payload);
   }
 
   Future<void> clearOrderQr(String id) async {
-    await _syncMutation(
-      orderId: id,
-      actionType: SyncActionType.clearQr,
-      payload: {},
-      applyLocal: () =>
-          _sync.applyLocalOrderPatch(id, (o) => o.clientQrCode = ''),
-    );
-  }
+    await _sync.applyLocalOrderPatch(id, (o) => o.clientQrCode = '');
+    const payload = '{}';
 
-  Future<void> updateOrderStatus(String id, String status) async {
-    await _syncMutation(
-      orderId: id,
-      actionType: SyncActionType.updateStatus,
-      payload: {'status': status},
-      applyLocal: () => _sync.applyLocalOrderPatch(id, (o) => o.status = status),
-    );
+    if (await _isOnline()) {
+      try {
+        await supabase
+            .from('orders')
+            .update({'client_qr_code': ''})
+            .eq('id', id);
+        return;
+      } catch (e) {
+        await _sync.addTask(SyncActionType.clearQr, id, payload);
+        rethrow;
+      }
+    }
+
+    await _sync.addTask(SyncActionType.clearQr, id, payload);
   }
 
   Future<void> createOrder(OrderModel order) async {
@@ -191,20 +256,18 @@ class DatabaseService {
       await isar.orderModels.put(order);
     });
 
-    final payload = {'order': order.toJson()};
-    final jsonPayload = jsonEncode(payload);
+    final payload = jsonEncode({'order': order.toJson()});
 
-    if (await _sync.isOnline) {
+    if (await _isOnline()) {
       try {
-        await _sync.executeAction(
-          SyncActionType.createOrder,
-          order.id,
-          jsonPayload,
-        );
+        await supabase.from('orders').insert(order.toJson());
         return;
-      } catch (_) {}
+      } catch (e) {
+        await _sync.addTask(SyncActionType.createOrder, order.id, payload);
+        rethrow;
+      }
     }
 
-    await _sync.addTask(SyncActionType.createOrder, order.id, jsonPayload);
+    await _sync.addTask(SyncActionType.createOrder, order.id, payload);
   }
 }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:arash_curier/models/order_model.dart';
+import 'package:arash_curier/services/realtime_service.dart';
 import 'package:arash_curier/services/database_service.dart';
 import 'package:arash_curier/services/auth_service.dart';
 import 'package:arash_curier/screens/login_screen.dart';
@@ -18,6 +19,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final _searchController = TextEditingController();
+  final _realtimeService = RealtimeService();
   String _searchQuery = '';
   Map<String, List<OrderModel>>? _allOrders;
   bool _isLoading = true;
@@ -94,6 +96,12 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _initData();
+
+    _realtimeService.subscribeToOrders(() {
+      if (mounted) {
+        _refreshOrders();
+      }
+    });
   }
 
   Future<void> _initData() async {
@@ -113,6 +121,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
+    _realtimeService.dispose();
     _searchController.dispose();
     super.dispose();
   }

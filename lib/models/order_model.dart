@@ -1,52 +1,84 @@
-// Immutable-модель одного заказа курьера (данные из Supabase / UI).
+import 'package:isar/isar.dart';
+
+part 'order_model.g.dart';
+
+/// Локальная + серверная модель заказа (Isar + Supabase).
+@Collection()
 class OrderModel {
-  final String id;
-  final DateTime dateCreated;
-  final DateTime dateUpdated;
+  Id isarId = Isar.autoIncrement;
 
-  final String companyName;
-  final String companyAddress;
-  final String responsiblePerson;
+  /// UUID / id строки в Supabase (уникальный ключ синхронизации).
+  @Index(unique: true, replace: true)
+  late String id;
 
-  final String clientName;
-  final String deliveryCity;
+  late DateTime dateCreated;
+  late DateTime dateUpdated;
 
-  final String pvzQrCode;
-  final String clientQrCode;
-  final String urlPhoto;
+  late String companyName;
+  late String companyAddress;
+  late String responsiblePerson;
 
-  final String status;
-  final String? comment;
-  final String? cancelReason;
+  late String clientName;
+  late String deliveryCity;
 
-  final double clientPayment;
-  final double debtAmount;
-  final double deliveryPrice;
-  final double pointsDeduction;
+  late String pvzQrCode;
+  late String clientQrCode;
+  late String urlPhoto;
+
+  late String status;
+  String? comment;
+  String? cancelReason;
+
+  late double clientPayment;
+  late double debtAmount;
+  late double deliveryPrice;
+  late double pointsDeduction;
 
   double get totalAmount =>
       (clientPayment + debtAmount + deliveryPrice) - pointsDeduction;
 
-  OrderModel({
-    required this.id,
-    required this.dateCreated,
-    required this.dateUpdated,
-    required this.companyName,
-    required this.companyAddress,
-    required this.responsiblePerson,
-    required this.clientName,
-    required this.deliveryCity,
-    required this.pvzQrCode,
-    required this.clientQrCode,
-    required this.urlPhoto,
-    required this.status,
-    this.comment,
-    this.cancelReason,
-    required this.clientPayment,
-    required this.debtAmount,
-    required this.deliveryPrice,
-    required this.pointsDeduction,
-  });
+  OrderModel();
+
+  factory OrderModel.create({
+    required String id,
+    required DateTime dateCreated,
+    required DateTime dateUpdated,
+    required String companyName,
+    required String companyAddress,
+    required String responsiblePerson,
+    required String clientName,
+    required String deliveryCity,
+    required String pvzQrCode,
+    required String clientQrCode,
+    required String urlPhoto,
+    required String status,
+    String? comment,
+    String? cancelReason,
+    required double clientPayment,
+    required double debtAmount,
+    required double deliveryPrice,
+    required double pointsDeduction,
+  }) {
+    return OrderModel()
+      ..id = id
+      ..dateCreated = dateCreated
+      ..dateUpdated = dateUpdated
+      ..companyName = companyName
+      ..companyAddress = companyAddress
+      ..responsiblePerson = responsiblePerson
+      ..clientName = clientName
+      ..deliveryCity = deliveryCity
+      ..pvzQrCode = pvzQrCode
+      ..clientQrCode = clientQrCode
+      ..urlPhoto = urlPhoto
+      ..status = status
+      ..comment = comment
+      ..cancelReason = cancelReason
+      ..clientPayment = clientPayment
+      ..debtAmount = debtAmount
+      ..deliveryPrice = deliveryPrice
+      ..pointsDeduction = pointsDeduction;
+  }
 
   OrderModel copyWith({
     String? id,
@@ -68,7 +100,7 @@ class OrderModel {
     double? deliveryPrice,
     double? pointsDeduction,
   }) {
-    return OrderModel(
+    return OrderModel.create(
       id: id ?? this.id,
       dateCreated: dateCreated ?? this.dateCreated,
       dateUpdated: dateUpdated ?? this.dateUpdated,
@@ -91,7 +123,7 @@ class OrderModel {
   }
 
   factory OrderModel.fromJson(Map<String, dynamic> json) {
-    return OrderModel(
+    return OrderModel.create(
       id: json['id']?.toString() ?? 'ОШИБКА_ID',
       dateCreated: json['date_created'] != null
           ? DateTime.parse(json['date_created'])

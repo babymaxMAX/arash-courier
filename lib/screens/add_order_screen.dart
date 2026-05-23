@@ -83,7 +83,7 @@ class _AddOrderScreenState extends State<AddOrderScreen> {
 
     final now = DateTime.now(); // Текущее время для dateUpdated (и id при создании).
 
-    final order = OrderModel(
+    final order = OrderModel.create(
       id: widget.order?.id ?? now.millisecondsSinceEpoch.toString(),
       dateCreated: widget.order?.dateCreated ?? now,
       dateUpdated: now,

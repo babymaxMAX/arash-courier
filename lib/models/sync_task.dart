@@ -8,6 +8,7 @@ abstract class SyncActionType {
   static const createOrder = 'create_order';
   static const addPhoto = 'add_photo';
   static const updateComment = 'update_comment';
+  static const addComment = 'add_comment';
   static const updatePayment = 'update_payment';
   static const delayOrder = 'delay_order';
   static const updatePvzQr = 'update_pvz_qr';

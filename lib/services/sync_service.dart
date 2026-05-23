@@ -17,8 +17,6 @@ class SyncService {
   final Isar isar;
   final SupabaseClient supabase = Supabase.instance.client;
 
-  StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
-
   static const _courierExcludedStatuses = [
     'Выдано',
     'Отменено',
@@ -29,21 +27,6 @@ class SyncService {
     'RETURN',
     'RETURNED',
   ];
-
-  /// Слушатель сети: при появлении связи обрабатывает очередь.
-  void startConnectivityListener() {
-    _connectivitySub?.cancel();
-    _connectivitySub = Connectivity().onConnectivityChanged.listen((results) {
-      if (results.any((r) => r != ConnectivityResult.none)) {
-        trySync();
-      }
-    });
-  }
-
-  void dispose() {
-    _connectivitySub?.cancel();
-    _connectivitySub = null;
-  }
 
   Future<bool> get isOnline async {
     final results = await Connectivity().checkConnectivity();
@@ -101,28 +84,52 @@ class SyncService {
     }
   }
 
+  /// Разбор payload: JSON-объект или простая строка (legacy).
+  Map<String, dynamic> _payloadMap(SyncTask task) {
+    try {
+      final decoded = jsonDecode(task.payload);
+      if (decoded is Map<String, dynamic>) return decoded;
+      if (decoded is Map) return Map<String, dynamic>.from(decoded);
+    } catch (_) {}
+    return {};
+  }
+
+  double _payloadAmount(SyncTask task) {
+    final map = _payloadMap(task);
+    if (map.containsKey('amount')) {
+      final value = map['amount'];
+      if (value is num) return value.toDouble();
+      return double.parse(value.toString());
+    }
+    return double.parse(task.payload);
+  }
+
   Future<void> _processTask(SyncTask task) async {
-    final data = jsonDecode(task.payload) as Map<String, dynamic>;
+    final data = _payloadMap(task);
 
     switch (task.actionType) {
       case SyncActionType.updateStatus:
+        final status = data['status']?.toString() ?? task.payload;
         await supabase
             .from('orders')
-            .update({'status': data['status']})
+            .update({'status': status})
             .eq('id', task.orderId);
         break;
 
       case SyncActionType.updateComment:
+      case SyncActionType.addComment:
+        final comment = data['comment']?.toString() ?? task.payload;
         await supabase
             .from('orders')
-            .update({'comment': data['comment']})
+            .update({'comment': comment})
             .eq('id', task.orderId);
         break;
 
       case SyncActionType.updatePayment:
+        final amount = _payloadAmount(task);
         await supabase
             .from('orders')
-            .update({'client_payment': data['amount']})
+            .update({'client_payment': amount})
             .eq('id', task.orderId);
         break;
 

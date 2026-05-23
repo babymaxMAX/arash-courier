@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:arash_curier/screens/home_screen.dart';
 import 'package:arash_curier/screens/login_screen.dart';
+import 'package:arash_curier/services/connection_wrapper.dart';
 import 'package:arash_curier/services/isar_service.dart';
 import 'package:arash_curier/theme/app_theme.dart';
 
@@ -17,7 +18,7 @@ Future<void> main() async {
     anonKey: 'sb_publishable_bNPNpzZW75p8puMRR1fNYQ_RxbXX5QQ',
   );
 
-  runApp(const MyApp());
+  runApp(const ConnectionWrapper(child: MyApp()));
 }
 
 class MyApp extends StatelessWidget {

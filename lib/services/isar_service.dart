@@ -15,5 +15,4 @@ Future<void> initIsar() async {
     directory: dir.path,
   );
   syncService = SyncService(isar);
-  syncService.startConnectivityListener();
 }

@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:flutter/foundation.dart';
 import 'package:isar/isar.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -10,11 +12,12 @@ import 'package:arash_curier/models/sync_task.dart';
 
 /// Очередь мутаций и отправка на Supabase при наличии сети.
 class SyncService {
-  SyncService({required this.isar, SupabaseClient? client})
-      : supabase = client ?? Supabase.instance.client;
+  SyncService(this.isar);
 
   final Isar isar;
-  final SupabaseClient supabase;
+  final SupabaseClient supabase = Supabase.instance.client;
+
+  StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
 
   static const _courierExcludedStatuses = [
     'Выдано',
@@ -27,113 +30,148 @@ class SyncService {
     'RETURNED',
   ];
 
+  /// Слушатель сети: при появлении связи обрабатывает очередь.
+  void startConnectivityListener() {
+    _connectivitySub?.cancel();
+    _connectivitySub = Connectivity().onConnectivityChanged.listen((results) {
+      if (results.any((r) => r != ConnectivityResult.none)) {
+        trySync();
+      }
+    });
+  }
+
+  void dispose() {
+    _connectivitySub?.cancel();
+    _connectivitySub = null;
+  }
+
   Future<bool> get isOnline async {
     final results = await Connectivity().checkConnectivity();
     return results.any((r) => r != ConnectivityResult.none);
   }
 
-  /// Добавить задачу в очередь и сразу попытаться отправить.
-  Future<void> enqueue(String action, Map<String, dynamic> payload) async {
-    final task = SyncTask.create(
-      action: action,
-      payload: jsonEncode(payload),
-    );
+  /// Добавить задачу в очередь и попытаться отправить сразу.
+  Future<void> addTask(
+    String actionType,
+    String orderId,
+    String jsonPayload,
+  ) async {
+    final task = SyncTask()
+      ..actionType = actionType
+      ..orderId = orderId
+      ..payload = jsonPayload
+      ..createdAt = DateTime.now();
+
     await isar.writeTxn(() async {
       await isar.syncTasks.put(task);
     });
+
     await trySync();
+  }
+
+  /// Выполнить одно действие на сервере (без записи в очередь).
+  Future<void> executeAction(
+    String actionType,
+    String orderId,
+    String jsonPayload,
+  ) async {
+    final task = SyncTask()
+      ..actionType = actionType
+      ..orderId = orderId
+      ..payload = jsonPayload;
+    await _processTask(task);
   }
 
   /// Обработать все задачи из очереди (если есть интернет).
   Future<void> trySync() async {
-    if (!await isOnline) return;
+    final connectivity = await Connectivity().checkConnectivity();
+    if (!connectivity.any((r) => r != ConnectivityResult.none)) return;
 
     final tasks = await isar.syncTasks.where().sortByCreatedAt().findAll();
+
     for (final task in tasks) {
       try {
-        await _execute(task);
+        await _processTask(task);
         await isar.writeTxn(() async {
           await isar.syncTasks.delete(task.id);
         });
       } catch (e) {
-        // Оставляем в очереди — повторим при следующем trySync
-        break;
+        debugPrint('Ошибка синхронизации задачи ${task.id}: $e');
       }
     }
   }
 
-  Future<void> _execute(SyncTask task) async {
+  Future<void> _processTask(SyncTask task) async {
     final data = jsonDecode(task.payload) as Map<String, dynamic>;
 
-    switch (task.action) {
-      case 'updateOrderComment':
-        await supabase
-            .from('orders')
-            .update({'comment': data['comment']})
-            .eq('id', data['orderId']);
-        break;
-
-      case 'updateClientPayment':
-        await supabase
-            .from('orders')
-            .update({'client_payment': data['amount']})
-            .eq('id', data['orderId']);
-        break;
-
-      case 'delayOrder':
-        await supabase.from('orders').update({
-          'status': 'delayed',
-          'cancel_reason': data['reason'],
-        }).eq('id', data['orderId']);
-        break;
-
-      case 'updateOrderStatus':
+    switch (task.actionType) {
+      case SyncActionType.updateStatus:
         await supabase
             .from('orders')
             .update({'status': data['status']})
-            .eq('id', data['orderId']);
+            .eq('id', task.orderId);
         break;
 
-      case 'updatePvzQr':
+      case SyncActionType.updateComment:
+        await supabase
+            .from('orders')
+            .update({'comment': data['comment']})
+            .eq('id', task.orderId);
+        break;
+
+      case SyncActionType.updatePayment:
+        await supabase
+            .from('orders')
+            .update({'client_payment': data['amount']})
+            .eq('id', task.orderId);
+        break;
+
+      case SyncActionType.delayOrder:
+        await supabase.from('orders').update({
+          'status': 'delayed',
+          'cancel_reason': data['reason'],
+        }).eq('id', task.orderId);
+        break;
+
+      case SyncActionType.updatePvzQr:
         await supabase
             .from('orders')
             .update({'pvz_qr_code': data['qrCode']})
-            .eq('id', data['orderId']);
+            .eq('id', task.orderId);
         break;
 
-      case 'updateOrderQr':
+      case SyncActionType.updateClientQr:
         await supabase
             .from('orders')
             .update({'client_qr_code': data['qrCode']})
-            .eq('id', data['orderId']);
+            .eq('id', task.orderId);
         break;
 
-      case 'clearOrderPhoto':
+      case SyncActionType.clearPhoto:
         await supabase
             .from('orders')
             .update({'url_photo': ''})
-            .eq('id', data['orderId']);
+            .eq('id', task.orderId);
         break;
 
-      case 'clearOrderQr':
+      case SyncActionType.clearQr:
         await supabase
             .from('orders')
             .update({'client_qr_code': ''})
-            .eq('id', data['orderId']);
+            .eq('id', task.orderId);
         break;
 
-      case 'createOrder':
+      case SyncActionType.createOrder:
         await supabase.from('orders').insert(data['order']);
         break;
 
-      case 'uploadOrderPhoto':
-        final orderId = data['orderId'] as String;
+      case SyncActionType.addPhoto:
         final localPath = data['localPath'] as String;
         final file = File(localPath);
         if (!await file.exists()) {
           throw Exception('Photo file not found: $localPath');
         }
-        final fileName = 'order_$orderId.jpg';
+        final fileName = 'order_${task.orderId}.jpg';
         await supabase.storage.from('packages').upload(
               fileName,
               file,
@@ -146,11 +184,11 @@ class SyncService {
         await supabase
             .from('orders')
             .update({'url_photo': publicUrl})
-            .eq('id', orderId);
+            .eq('id', task.orderId);
         break;
 
       default:
-        throw Exception('Unknown sync action: ${task.action}');
+        throw Exception('Unknown sync action: ${task.actionType}');
     }
   }
 
@@ -185,7 +223,8 @@ class SyncService {
     String orderId,
     void Function(OrderModel order) patch,
   ) async {
-    final existing = await isar.orderModels.filter().idEqualTo(orderId).findFirst();
+    final existing =
+        await isar.orderModels.filter().idEqualTo(orderId).findFirst();
     if (existing == null) return;
     patch(existing);
     existing.dateUpdated = DateTime.now();

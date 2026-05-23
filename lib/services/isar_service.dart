@@ -14,5 +14,6 @@ Future<void> initIsar() async {
     [OrderModelSchema, SyncTaskSchema],
     directory: dir.path,
   );
-  syncService = SyncService(isar: isar);
+  syncService = SyncService(isar);
+  syncService.startConnectivityListener();
 }

@@ -6,12 +6,14 @@ import 'package:arash_curier/widgets/home/order_tile_widget.dart';
 class PvzFolderCard extends StatelessWidget {
   final String folderKey;
   final List<OrderModel> orders;
+  final String userRole;
   final VoidCallback onRefresh;
 
   const PvzFolderCard({
     super.key,
     required this.folderKey,
     required this.orders,
+    required this.userRole,
     required this.onRefresh,
   });
 
@@ -92,6 +94,7 @@ class PvzFolderCard extends StatelessWidget {
                 (order) => OrderTileWidget(
                   key: ValueKey(order.id),
                   order: order,
+                  userRole: userRole,
                   onRefresh: onRefresh,
                 ),
               )

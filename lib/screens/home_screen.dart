@@ -251,6 +251,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                   return PvzFolderCard(
                                     folderKey: folderKey,
                                     orders: orders,
+                                    userRole: _userRole,
                                     onRefresh: _refreshOrders,
                                   );
                                 },

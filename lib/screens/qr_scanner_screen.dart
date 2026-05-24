@@ -41,7 +41,7 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Сканировать QR'), // Заголовок в AppBar.
+        title: const Text('Сканировать штрих-код'), // Заголовок в AppBar.
         backgroundColor: Colors.deepOrange, // Фон полосы сверху.
         foregroundColor: Colors.white, // Цвет текста и иконок AppBar.
       ),

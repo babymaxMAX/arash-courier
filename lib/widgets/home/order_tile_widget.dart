@@ -9,7 +9,6 @@ import 'package:arash_curier/screens/qr_scanner_screen.dart';
 import 'package:arash_curier/screens/add_order_screen.dart';
 import 'package:arash_curier/dialogs/order_bottom_sheet.dart';
 import 'package:arash_curier/utils/app_snackbar.dart';
-import 'package:arash_curier/utils/camera_permission.dart';
 
 class OrderTileWidget extends StatefulWidget {
   final OrderModel order;
@@ -64,22 +63,31 @@ class _OrderTileWidgetState extends State<OrderTileWidget> {
   }
 
   Future<void> _addPhoto() async {
-    if (!await ensureCameraPermission(context)) return;
-
-    final picker = ImagePicker();
-    final file = await picker.pickImage(
-      source: ImageSource.camera,
-      imageQuality: 80,
-    );
-    if (file == null) return;
-    await _run(
-      () => DatabaseService().addOrderPhoto(
-        order.id,
-        File(file.path),
-        order.photos,
-      ),
-      success: 'Фото добавлено',
-    );
+    try {
+      final picker = ImagePicker();
+      final file = await picker.pickImage(
+        source: ImageSource.camera,
+        imageQuality: 80,
+        preferredCameraDevice: CameraDevice.rear,
+      );
+      if (file == null) return;
+      await _run(
+        () => DatabaseService().addOrderPhoto(
+          order.id,
+          File(file.path),
+          order.photos,
+        ),
+        success: 'Фото добавлено',
+      );
+    } catch (e) {
+      if (mounted) {
+        showAppSnackBar(
+          context,
+          'Камера недоступна. Разрешите доступ в Настройках → Arash Curier → Камера.',
+          isError: true,
+        );
+      }
+    }
   }
 
   void _showPhotoOptions(String photoUrl) {
@@ -104,20 +112,25 @@ class _OrderTileWidgetState extends State<OrderTileWidget> {
               title: const Text('Заменить фото'),
               onTap: () async {
                 Navigator.pop(ctx);
-                if (!await ensureCameraPermission(context)) return;
+                try {
+                  final picker = ImagePicker();
+                  final file = await picker.pickImage(
+                    source: ImageSource.camera,
+                    imageQuality: 80,
+                    preferredCameraDevice: CameraDevice.rear,
+                  );
+                  if (file == null) return;
 
-                final picker = ImagePicker();
-                final file = await picker.pickImage(
-                  source: ImageSource.camera,
-                  imageQuality: 80,
-                );
-                if (file == null) return;
-                
-                await _run(() async {
-                  await DatabaseService().addOrderPhoto(order.id, File(file.path), order.photos);
-                  await DatabaseService().removeOrderPhoto(order.id, photoUrl, order.photos);
-                  return 'Фото заменено';
-                });
+                  await _run(() async {
+                    await DatabaseService().addOrderPhoto(order.id, File(file.path), order.photos);
+                    await DatabaseService().removeOrderPhoto(order.id, photoUrl, order.photos);
+                    return 'Фото заменено';
+                  });
+                } catch (e) {
+                  if (mounted) {
+                    showAppSnackBar(context, 'Камера недоступна', isError: true);
+                  }
+                }
               },
             ),
             ListTile(

@@ -1,11 +1,11 @@
 // UI Flutter.
 import 'package:flutter/material.dart';
-// Пакет сканирования штрих-/QR-кодов через камеру.
+import 'package:image_picker/image_picker.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
-import 'package:arash_curier/utils/camera_permission.dart';
+import 'package:arash_curier/utils/app_snackbar.dart';
 
-// Экран камеры; результат — Navigator.pop(context, строка QR).
+/// Сканирование через снимок с камеры (без live-preview — стабильнее на iOS).
 class QRScannerScreen extends StatefulWidget {
   const QRScannerScreen({super.key});
 
@@ -13,49 +13,107 @@ class QRScannerScreen extends StatefulWidget {
   State<QRScannerScreen> createState() => _QRScannerScreenState();
 }
 
-// Состояние экрана сканера (контроллер камеры, флаг однократного считывания).
 class _QRScannerScreenState extends State<QRScannerScreen> {
-  MobileScannerController? controller;
-
-  // true после первого успешного скана — блокирует повторные pop.
-  bool isScanned = false;
-
-  bool _loading = true;
-  bool _denied = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _initCamera();
-  }
-
-  Future<void> _initCamera() async {
-    final granted = await ensureCameraPermission(context);
-    if (!mounted) return;
-
-    if (!granted) {
-      setState(() {
-        _loading = false;
-        _denied = true;
-      });
-      return;
-    }
-
-    controller = MobileScannerController(
-      formats: const [BarcodeFormat.all],
-      facing: CameraFacing.back,
-      detectionSpeed: DetectionSpeed.normal,
-    );
-
-    if (mounted) {
-      setState(() => _loading = false);
-    }
-  }
+  final _manualController = TextEditingController();
+  final _picker = ImagePicker();
+  bool _busy = false;
 
   @override
   void dispose() {
-    controller?.dispose();
+    _manualController.dispose();
     super.dispose();
+  }
+
+  Future<void> _scanWithCamera() async {
+    if (_busy) return;
+    setState(() => _busy = true);
+
+    try {
+      final file = await _picker.pickImage(
+        source: ImageSource.camera,
+        imageQuality: 85,
+        preferredCameraDevice: CameraDevice.rear,
+      );
+      if (!mounted) return;
+      if (file == null) return;
+
+      final controller = MobileScannerController();
+      try {
+        final capture = await controller.analyzeImage(file.path);
+        if (!mounted) return;
+
+        final codes = capture?.barcodes ?? const <Barcode>[];
+        for (final barcode in codes) {
+          final value = barcode.rawValue?.trim();
+          if (value != null && value.isNotEmpty) {
+            Navigator.pop(context, value);
+            return;
+          }
+        }
+
+        showAppSnackBar(
+          context,
+          'Штрих-код не найден. Попробуйте ближе к коду или введите вручную.',
+          isError: true,
+        );
+      } finally {
+        await controller.dispose();
+      }
+    } catch (e) {
+      if (mounted) {
+        showAppSnackBar(context, 'Камера недоступна: $e', isError: true);
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _scanFromGallery() async {
+    if (_busy) return;
+    setState(() => _busy = true);
+
+    try {
+      final file = await _picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 85,
+      );
+      if (!mounted) return;
+      if (file == null) return;
+
+      final controller = MobileScannerController();
+      try {
+        final capture = await controller.analyzeImage(file.path);
+        if (!mounted) return;
+
+        final codes = capture?.barcodes ?? const <Barcode>[];
+        for (final barcode in codes) {
+          final value = barcode.rawValue?.trim();
+          if (value != null && value.isNotEmpty) {
+            Navigator.pop(context, value);
+            return;
+          }
+        }
+
+        showAppSnackBar(context, 'Штрих-код не найден на фото.', isError: true);
+      } finally {
+        await controller.dispose();
+      }
+    } catch (e) {
+      if (mounted) {
+        showAppSnackBar(context, 'Не удалось открыть галерею: $e', isError: true);
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  void _submitManual() {
+    final value = _manualController.text.trim();
+    if (value.isEmpty) {
+      showAppSnackBar(context, 'Введите код вручную', isError: true);
+      return;
+    }
+    Navigator.pop(context, value);
   }
 
   @override
@@ -66,67 +124,59 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
         backgroundColor: Colors.deepOrange,
         foregroundColor: Colors.white,
       ),
-      body: _buildBody(),
-    );
-  }
-
-  Widget _buildBody() {
-    if (_loading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    if (_denied || controller == null) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.no_photography, size: 64, color: Colors.grey),
-              const SizedBox(height: 16),
-              const Text(
-                'Нет доступа к камере',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Разрешите камеру в настройках iPhone, затем откройте сканер снова.',
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 24),
-              FilledButton(
-                onPressed: () async {
-                  await ensureCameraPermission(context);
-                  if (!mounted) return;
-                  setState(() {
-                    _loading = true;
-                    _denied = false;
-                  });
-                  await _initCamera();
-                },
-                child: const Text('Повторить'),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    return MobileScanner(
-      controller: controller!,
-      onDetect: (capture) {
-        if (!isScanned) {
-          final List<Barcode> barcodes = capture.barcodes;
-          for (final barcode in barcodes) {
-            if (barcode.rawValue != null) {
-              isScanned = true;
-              Navigator.pop(context, barcode.rawValue);
-              break;
-            }
-          }
-        }
-      },
+      body: _busy
+          ? const Center(child: CircularProgressIndicator())
+          : ListView(
+              padding: const EdgeInsets.all(20),
+              children: [
+                const Icon(Icons.qr_code_scanner, size: 72, color: Colors.deepOrange),
+                const SizedBox(height: 16),
+                const Text(
+                  'Наведите камеру на штрих-код и сделайте снимок. '
+                  'iOS покажет запрос доступа к камере при первом использовании.',
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 24),
+                FilledButton.icon(
+                  onPressed: _scanWithCamera,
+                  icon: const Icon(Icons.photo_camera),
+                  label: const Text('Сфотографировать код'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Colors.deepOrange,
+                    minimumSize: const Size.fromHeight(48),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed: _scanFromGallery,
+                  icon: const Icon(Icons.photo_library_outlined),
+                  label: const Text('Выбрать из галереи'),
+                  style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+                ),
+                const SizedBox(height: 28),
+                const Divider(),
+                const SizedBox(height: 12),
+                const Text(
+                  'Или введите код вручную',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _manualController,
+                  decoration: const InputDecoration(
+                    border: OutlineInputBorder(),
+                    hintText: 'Номер штрих-кода',
+                  ),
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) => _submitManual(),
+                ),
+                const SizedBox(height: 12),
+                FilledButton(
+                  onPressed: _submitManual,
+                  child: const Text('Готово'),
+                ),
+              ],
+            ),
     );
   }
 }

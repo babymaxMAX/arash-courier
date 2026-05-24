@@ -294,6 +294,91 @@ class DatabaseService {
     await _sync.addTask(SyncActionType.clearQr, id, payload);
   }
 
+  // --- РАБОТА С МНОЖЕСТВЕННЫМИ ФОТО ---
+
+  Future<void> addOrderPhoto(
+    String id,
+    File imageFile,
+    List<String> currentPhotos,
+  ) async {
+    if (await _isOnline()) {
+      try {
+        final uniqueSuffix = DateTime.now().millisecondsSinceEpoch;
+        final fileName = 'order_${id}_$uniqueSuffix.jpg';
+
+        await supabase.storage.from('packages').upload(fileName, imageFile);
+        final publicUrl =
+            supabase.storage.from('packages').getPublicUrl(fileName);
+
+        final updatedPhotos = List<String>.from(currentPhotos)..add(publicUrl);
+
+        await supabase.from('orders').update({
+          'url_photo': OrderModel.encodeList(updatedPhotos),
+        }).eq('id', id);
+      } catch (e) {
+        rethrow;
+      }
+    } else {
+      throw Exception('Добавление фото пока доступно только онлайн');
+    }
+  }
+
+  Future<void> removeOrderPhoto(
+    String orderId,
+    String photoUrl,
+    List<String> currentPhotos,
+  ) async {
+    try {
+      final updatedPhotos = List<String>.from(currentPhotos)..remove(photoUrl);
+
+      await supabase.from('orders').update({
+        'url_photo': OrderModel.encodeList(updatedPhotos),
+      }).eq('id', orderId);
+
+      final fileName = photoUrl.split('/').last.split('?').first;
+      await supabase.storage.from('packages').remove([fileName]);
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  // --- РАБОТА С МНОЖЕСТВЕННЫМИ QR КОДАМИ ---
+
+  Future<void> addQrCode(
+    String id,
+    String code,
+    List<String> currentQrs,
+    bool isClientQr,
+  ) async {
+    final updatedQrs = List<String>.from(currentQrs)..add(code);
+    final column = isClientQr ? 'client_qr_code' : 'pvz_qr_code';
+
+    if (await _isOnline()) {
+      await supabase.from('orders').update({
+        column: OrderModel.encodeList(updatedQrs),
+      }).eq('id', id);
+    } else {
+      await _sync.addTask(
+        isClientQr ? SyncActionType.updateClientQr : SyncActionType.updatePvzQr,
+        id,
+        OrderModel.encodeList(updatedQrs),
+      );
+    }
+  }
+
+  Future<void> removeQrCode(
+    String id,
+    String code,
+    List<String> currentQrs,
+    bool isClientQr,
+  ) async {
+    final updatedQrs = List<String>.from(currentQrs)..remove(code);
+    final column = isClientQr ? 'client_qr_code' : 'pvz_qr_code';
+    await supabase.from('orders').update({
+      column: OrderModel.encodeList(updatedQrs),
+    }).eq('id', id);
+  }
+
   Future<void> createOrder(OrderModel order) async {
     await isar.writeTxn(() async {
       await isar.orderModels.put(order);

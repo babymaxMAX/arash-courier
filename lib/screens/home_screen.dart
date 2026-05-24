@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:fl_chart/fl_chart.dart';
+import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'package:arash_curier/models/order_model.dart';
 import 'package:arash_curier/services/realtime_service.dart';
 import 'package:arash_curier/services/database_service.dart';
@@ -8,6 +10,7 @@ import 'package:arash_curier/screens/add_order_screen.dart';
 import 'package:arash_curier/screens/chat_screen.dart';
 import 'package:arash_curier/utils/order_grouping.dart';
 import 'package:arash_curier/utils/app_snackbar.dart';
+import 'package:arash_curier/utils/pvz_style.dart';
 import 'package:arash_curier/widgets/home/pvz_folder_card.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -21,15 +24,37 @@ class _HomeScreenState extends State<HomeScreen> {
   final _searchController = TextEditingController();
   final _realtimeService = RealtimeService();
   String _searchQuery = '';
+  String? _selectedPvz;
+  String? _selectedAddress;
   Map<String, List<OrderModel>>? _allOrders;
   bool _isLoading = true;
   String _userRole = 'courier';
+  String _userEmail = '';
   int _currentIndex = 0; // Индекс для нижнего меню
+
+  String get _roleName {
+    if (_userRole == 'admin' || _userRole == 'manager') return 'Менеджер';
+    return 'Курьер';
+  }
 
   int get _totalOrders {
     final orders = _allOrders;
     if (orders == null) return 0;
     return orders.values.fold(0, (sum, list) => sum + list.length);
+  }
+
+  int get _completedOrders {
+    final orders = _allOrders;
+    if (orders == null) return 0;
+    int count = 0;
+    for (var list in orders.values) {
+      count += list.where((o) => o.status == 'Готово' || o.status == 'SHIPPING').length;
+    }
+    return count;
+  }
+
+  int get _pendingOrders {
+    return _totalOrders - _completedOrders;
   }
 
   Future<void> _refreshOrders() async {
@@ -107,13 +132,15 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _initData() async {
     try {
       final role = await AuthService().getUserRole();
+      final email = AuthService().supabase.auth.currentUser?.email ?? '';
       if (mounted) {
         setState(() {
           _userRole = role;
+          _userEmail = email;
         });
       }
     } catch (e) {
-      print('Ошибка получения роли: $e');
+      debugPrint('Ошибка получения роли: $e');
     } finally {
       await _refreshOrders();
     }
@@ -128,7 +155,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final filtered = filterOrdersBySearch(_allOrders ?? {}, _searchQuery);
+    final filtered = filterOrdersBySearch(_allOrders ?? {}, _searchQuery, _selectedPvz, _selectedAddress);
+
+    final pvzs = _allOrders?.values.expand((l) => l).map((o) => o.companyName).where((e) => e.isNotEmpty).toSet().toList() ?? [];
+    final addresses = _allOrders?.values.expand((l) => l).map((o) => o.companyAddress).where((e) => e.isNotEmpty).toSet().toList() ?? [];
+    pvzs.sort();
+    addresses.sort();
 
     // Цвет бренда ПВЗ из ТЗ
     const Color brandGreen = Color(0xFF2E7D32);
@@ -139,11 +171,22 @@ class _HomeScreenState extends State<HomeScreen> {
         backgroundColor: brandGreen,
         foregroundColor: Colors.white,
         elevation: 0,
-        title: const Column(
+        title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('ARASH COURIER', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
-            Text('Смена открыта', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w400, color: Colors.white70)),
+            Row(
+              children: [
+                Text('${getUserAvatar(_userEmail)} $_roleName ', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                Expanded(
+                  child: Text(
+                    _userEmail.split('@').first, 
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w400, color: Colors.white70),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+            const Text('Смена открыта', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w400, color: Colors.white70)),
           ],
         ),
         actions: [
@@ -154,11 +197,14 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Icon(Icons.notifications_none, color: Colors.white),
             ),
             onPressed: () {
-              // Будущий экран уведомлений
+              showAppSnackBar(context, 'Уведомления находятся в разработке');
             },
           ),
           IconButton(
-            onPressed: _isLoading ? null : _refreshOrders,
+            onPressed: () {
+              setState(() => _isLoading = true);
+              _refreshOrders();
+            },
             icon: const Icon(Icons.refresh_rounded, color: Colors.white),
             tooltip: 'Обновить',
           ),
@@ -176,6 +222,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   children: [
                     _StatsBanner(
                       totalOrders: _totalOrders,
+                      completedOrders: _completedOrders,
+                      pendingOrders: _pendingOrders,
                       folderCount: _allOrders?.length ?? 0,
                     ),
                     Padding(
@@ -204,6 +252,54 @@ class _HomeScreenState extends State<HomeScreen> {
                         onChanged: (value) {
                           setState(() => _searchQuery = value.toLowerCase());
                         },
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: DropdownButton<String>(
+                                underline: const SizedBox(),
+                                hint: const Text('Все ПВЗ', style: TextStyle(fontSize: 14)),
+                                value: _selectedPvz,
+                                isExpanded: true,
+                                items: [
+                                  const DropdownMenuItem(value: null, child: Text('Все ПВЗ', style: TextStyle(fontSize: 14))),
+                                  ...pvzs.map((p) => DropdownMenuItem(value: p, child: Text(p, style: const TextStyle(fontSize: 14)))),
+                                ],
+                                onChanged: (v) => setState(() => _selectedPvz = v),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: DropdownButton<String>(
+                                underline: const SizedBox(),
+                                hint: const Text('Все адреса', style: TextStyle(fontSize: 14)),
+                                value: _selectedAddress,
+                                isExpanded: true,
+                                items: [
+                                  const DropdownMenuItem(value: null, child: Text('Все адреса', style: TextStyle(fontSize: 14))),
+                                  ...addresses.map((a) => DropdownMenuItem(value: a, child: Text(a, style: const TextStyle(fontSize: 14)))),
+                                ],
+                                onChanged: (v) => setState(() => _selectedAddress = v),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                     Expanded(
@@ -240,30 +336,45 @@ class _HomeScreenState extends State<HomeScreen> {
                             )
                           : RefreshIndicator(
                               onRefresh: _refreshOrders,
-                              child: ListView.builder(
-                                physics: const AlwaysScrollableScrollPhysics(),
-                                padding: const EdgeInsets.fromLTRB(16, 0, 16, 88),
-                                itemCount: filtered.keys.length,
-                                itemBuilder: (context, index) {
-                                  final keys = filtered.keys.toList()..sort();
-                                  final folderKey = keys[index];
-                                  final orders = sortOrders(filtered[folderKey]!);
-                                  return PvzFolderCard(
-                                    folderKey: folderKey,
-                                    orders: orders,
-                                    userRole: _userRole,
-                                    onRefresh: _refreshOrders,
-                                  );
-                                },
+                              child: AnimationLimiter(
+                                child: ListView.builder(
+                                  physics: const AlwaysScrollableScrollPhysics(),
+                                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 88),
+                                  itemCount: filtered.keys.length,
+                                  itemBuilder: (context, index) {
+                                    final keys = filtered.keys.toList()..sort((a, b) {
+                                      final aOther = a.toLowerCase().startsWith('другое');
+                                      final bOther = b.toLowerCase().startsWith('другое');
+                                      if (aOther && !bOther) return 1;
+                                      if (!aOther && bOther) return -1;
+                                      return a.compareTo(b);
+                                    });
+                                    final folderKey = keys[index];
+                                    final orders = sortOrders(filtered[folderKey]!);
+                                    return AnimationConfiguration.staggeredList(
+                                      position: index,
+                                      duration: const Duration(milliseconds: 375),
+                                      child: SlideAnimation(
+                                        verticalOffset: 50.0,
+                                        child: FadeInAnimation(
+                                          child: PvzFolderCard(
+                                            folderKey: folderKey,
+                                            orders: orders,
+                                            userRole: _userRole,
+                                            userEmail: _userEmail,
+                                            onRefresh: _refreshOrders,
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
                               ),
                             ),
                     ),
                   ],
                 )
-          : _ChatOrderListTab(
-              isLoading: _isLoading,
-              orders: _allOrders,
-            ),
+          : const ChatScreen(),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
         selectedItemColor: brandGreen,
@@ -310,75 +421,16 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-class _ChatOrderListTab extends StatelessWidget {
-  final bool isLoading;
-  final Map<String, List<OrderModel>>? orders;
-
-  const _ChatOrderListTab({
-    required this.isLoading,
-    required this.orders,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    if (isLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    final allOrders =
-        orders?.values.expand((list) => list).toList(growable: false) ?? [];
-
-    if (allOrders.isEmpty) {
-      return const Center(
-        child: Text(
-          'Нет заказов для чата',
-          style: TextStyle(color: Colors.grey, fontSize: 16),
-        ),
-      );
-    }
-
-    allOrders.sort((a, b) => a.clientName.compareTo(b.clientName));
-
-    return ListView.separated(
-      padding: const EdgeInsets.all(16),
-      itemCount: allOrders.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 8),
-      itemBuilder: (context, index) {
-        final order = allOrders[index];
-        final shortId = order.id.length > 8
-            ? order.id.substring(0, 8).toUpperCase()
-            : order.id.toUpperCase();
-
-        return Card(
-          child: ListTile(
-            leading: const Icon(Icons.chat_bubble_outline),
-            title: Text(order.clientName),
-            subtitle: Text('APP - $shortId'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => ChatScreen(
-                    orderId: order.id,
-                    orderTitle: order.clientName,
-                  ),
-                ),
-              );
-            },
-          ),
-        );
-      },
-    );
-  }
-}
-
 class _StatsBanner extends StatelessWidget {
   final int totalOrders;
+  final int completedOrders;
+  final int pendingOrders;
   final int folderCount;
 
   const _StatsBanner({
     required this.totalOrders,
+    required this.completedOrders,
+    required this.pendingOrders,
     required this.folderCount,
   });
 
@@ -386,38 +438,103 @@ class _StatsBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFFE65100), Color(0xFFFF8A50)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(16),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFFE65100).withValues(alpha: 0.35),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
           ),
         ],
+        border: Border.all(color: Colors.grey.shade100, width: 1.5),
       ),
       child: Row(
         children: [
-          _StatItem(
-            icon: Icons.inventory_2_outlined,
-            value: '$totalOrders',
-            label: 'Заказов',
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _StatItem(
+                  icon: Icons.inventory_2_rounded,
+                  value: '$totalOrders',
+                  label: 'Всего заказов',
+                  iconColor: const Color(0xFF2962FF),
+                  bgColor: const Color(0xFFE3F2FD),
+                ),
+                const SizedBox(height: 16),
+                _StatItem(
+                  icon: Icons.store_rounded,
+                  value: '$folderCount',
+                  label: 'Адресов (ПВЗ)',
+                  iconColor: const Color(0xFF8E24AA),
+                  bgColor: const Color(0xFFF3E5F5),
+                ),
+              ],
+            ),
           ),
-          Container(
-            width: 1,
-            height: 40,
-            color: Colors.white.withValues(alpha: 0.4),
-          ),
-          _StatItem(
-            icon: Icons.store_outlined,
-            value: '$folderCount',
-            label: 'ПВЗ',
+          SizedBox(
+            width: 140,
+            height: 140,
+            child: totalOrders == 0 
+              ? const Center(
+                  child: Text(
+                    'Нет\nзаказов', 
+                    textAlign: TextAlign.center, 
+                    style: TextStyle(color: Colors.grey, fontWeight: FontWeight.w500)
+                  )
+                )
+              : Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    PieChart(
+                      PieChartData(
+                        sectionsSpace: 4,
+                        centerSpaceRadius: 50,
+                        startDegreeOffset: -90,
+                        sections: [
+                          PieChartSectionData(
+                            color: const Color(0xFF00C853), // Яркий зеленый
+                            value: completedOrders.toDouble(),
+                            showTitle: false,
+                            radius: 16,
+                          ),
+                          if (pendingOrders > 0)
+                            PieChartSectionData(
+                              color: const Color(0xFFFF9100), // Яркий оранжевый
+                              value: pendingOrders.toDouble(),
+                              showTitle: false,
+                              radius: 12,
+                            ),
+                        ],
+                      ),
+                    ),
+                    Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          '${((completedOrders / totalOrders) * 100).toStringAsFixed(0)}%',
+                          style: const TextStyle(
+                            fontSize: 26,
+                            fontWeight: FontWeight.w900,
+                            color: Color(0xFF1A1A2E),
+                            letterSpacing: -0.5,
+                          ),
+                        ),
+                        const Text(
+                          'готово',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.grey,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
           ),
         ],
       ),
@@ -429,43 +546,53 @@ class _StatItem extends StatelessWidget {
   final IconData icon;
   final String value;
   final String label;
+  final Color iconColor;
+  final Color bgColor;
 
   const _StatItem({
     required this.icon,
     required this.value,
     required this.label,
+    required this.iconColor,
+    required this.bgColor,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, color: Colors.white, size: 28),
-          const SizedBox(width: 10),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                value,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 22,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              Text(
-                label,
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.9),
-                  fontSize: 12,
-                ),
-              ),
-            ],
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: bgColor,
+            borderRadius: BorderRadius.circular(14),
           ),
-        ],
-      ),
+          child: Icon(icon, color: iconColor, size: 24),
+        ),
+        const SizedBox(width: 14),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              value,
+              style: const TextStyle(
+                color: Color(0xFF1A1A2E),
+                fontSize: 22,
+                fontWeight: FontWeight.w900,
+                letterSpacing: -0.5,
+              ),
+            ),
+            Text(
+              label,
+              style: TextStyle(
+                color: Colors.grey,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }

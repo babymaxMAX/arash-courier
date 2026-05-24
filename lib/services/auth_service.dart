@@ -4,7 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 // Класс-обёртка над Supabase Auth и таблицей profiles (роль пользователя).
 class AuthService {
   // Ссылка на уже инициализированный в main() клиент Supabase.
-  final supabase = Supabase.instance.client;
+  SupabaseClient get supabase => Supabase.instance.client;
 
   // Геттер: true, если currentUser не null (есть активная сессия).
   bool get isAuthenticated => supabase.auth.currentUser != null;

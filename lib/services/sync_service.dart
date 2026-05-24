@@ -15,7 +15,7 @@ class SyncService {
   SyncService(this.isar);
 
   final Isar isar;
-  final SupabaseClient supabase = Supabase.instance.client;
+  SupabaseClient get supabase => Supabase.instance.client;
 
   static const _courierExcludedStatuses = [
     'Выдано',

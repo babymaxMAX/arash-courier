@@ -4,7 +4,7 @@ import 'package:arash_curier/models/message_model.dart';
 
 /// Отправка и Realtime-подписка на сообщения чата.
 class ChatService {
-  final SupabaseClient supabase = Supabase.instance.client;
+  SupabaseClient get supabase => Supabase.instance.client;
 
   /// Отправка сообщения в таблицу messages.
   Future<void> sendMessage(String orderId, String text) async {

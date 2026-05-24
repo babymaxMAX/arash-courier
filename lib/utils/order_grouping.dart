@@ -31,20 +31,29 @@ List<OrderModel> sortOrders(List<OrderModel> orders) {
 Map<String, List<OrderModel>> filterOrdersBySearch(
   Map<String, List<OrderModel>> allOrders,
   String searchQuery,
+  String? selectedPvz,
+  String? selectedAddress,
 ) {
   final q = searchQuery.trim().toLowerCase();
-  if (q.isEmpty) {
-    return allOrders;
-  }
-  final result = <String, List<OrderModel>> {};
+  final result = <String, List<OrderModel>>{};
 
   for (final entry in allOrders.entries) {
     final folderKey = entry.key;
     final filtered = entry.value.where((order) {
-      return order.clientName.toLowerCase().contains(q) ||
-      order.deliveryCity.toLowerCase().contains(q) ||
-      order.companyName.toLowerCase().contains(q) ||
-      order.companyAddress.toLowerCase().contains(q);
+      // 1. Фильтрация по ПВЗ и Адресу
+      if (selectedPvz != null && selectedPvz.isNotEmpty && order.companyName != selectedPvz) return false;
+      if (selectedAddress != null && selectedAddress.isNotEmpty && order.companyAddress != selectedAddress) return false;
+
+      // 2. Если поисковая строка пуста, оставляем заказ
+      if (q.isEmpty) return true;
+
+      // 3. Поиск по первым буквам имени клиента
+      final clientNameLower = order.clientName.toLowerCase();
+      final words = clientNameLower.split(RegExp(r'\s+'));
+      final matchesNamePrefix = words.any((word) => word.startsWith(q));
+
+      // 4. Также ищем по ID заказа (содержит)
+      return matchesNamePrefix || order.id.toLowerCase().contains(q);
     }).toList();
 
     if (filtered.isNotEmpty) {

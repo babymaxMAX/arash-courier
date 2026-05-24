@@ -13,7 +13,7 @@ import 'package:arash_curier/services/sync_service.dart';
 
 /// Умный посредник: онлайн — Supabase, офлайн — очередь SyncService + локальный Isar.
 class DatabaseService {
-  final SupabaseClient supabase = Supabase.instance.client;
+  SupabaseClient get supabase => Supabase.instance.client;
   final Isar isar;
   final SyncService _sync;
 
@@ -40,7 +40,7 @@ class DatabaseService {
           );
         }
 
-        final rawResponse = await query;
+        final rawResponse = await query.limit(99999);
         final sortedOrders = <String, List<OrderModel>>{};
 
         for (final row in rawResponse) {
@@ -124,6 +124,42 @@ class DatabaseService {
     await _sync.addTask(SyncActionType.updatePayment, id, payload);
   }
 
+  Future<void> takeFolderInWork(List<String> orderIds, String email) async {
+    for (var id in orderIds) {
+      await _sync.applyLocalOrderPatch(id, (o) => o.responsiblePerson = email);
+    }
+    
+    if (await _isOnline()) {
+      try {
+        await supabase
+            .from('orders')
+            .update({'responsible_person': email})
+            .inFilter('id', orderIds);
+        return;
+      } catch (e) {
+        // Fallback for offline mode if exception
+      }
+    }
+  }
+
+  Future<void> releaseFolderFromWork(List<String> orderIds) async {
+    for (var id in orderIds) {
+      await _sync.applyLocalOrderPatch(id, (o) => o.responsiblePerson = '');
+    }
+    
+    if (await _isOnline()) {
+      try {
+        await supabase
+            .from('orders')
+            .update({'responsible_person': ''})
+            .inFilter('id', orderIds);
+        return;
+      } catch (e) {
+        // Fallback for offline mode if exception
+      }
+    }
+  }
+
   Future<void> delayOrder(String id, String reason) async {
     await _sync.applyLocalOrderPatch(id, (o) {
       o.status = 'Отложено';
@@ -150,7 +186,9 @@ class DatabaseService {
   Future<String?> uploadOrderPhoto(String id, File imageFile) async {
     final localPath = imageFile.path;
     await _sync.applyLocalOrderPatch(id, (o) {
-      if (!o.photos.contains(localPath)) o.photos.add(localPath);
+      if (!o.photos.contains(localPath)) {
+        o.photos = List<String>.from(o.photos)..add(localPath);
+      }
     });
     final payload = jsonEncode({'localPath': localPath});
 
@@ -192,7 +230,9 @@ class DatabaseService {
 
   Future<void> updatePvzQr(String id, String qrCode) async {
     await _sync.applyLocalOrderPatch(id, (o) {
-      if (!o.pvzQrCodes.contains(qrCode)) o.pvzQrCodes.add(qrCode);
+      if (!o.pvzQrCodes.contains(qrCode)) {
+        o.pvzQrCodes = List<String>.from(o.pvzQrCodes)..add(qrCode);
+      }
     });
     final payload = jsonEncode({'qrCode': qrCode});
 
@@ -226,7 +266,9 @@ class DatabaseService {
 
   Future<void> updateOrderQr(String id, String qrCode) async {
     await _sync.applyLocalOrderPatch(id, (o) {
-      if (!o.clientQrCodes.contains(qrCode)) o.clientQrCodes.add(qrCode);
+      if (!o.clientQrCodes.contains(qrCode)) {
+        o.clientQrCodes = List<String>.from(o.clientQrCodes)..add(qrCode);
+      }
     });
     final payload = jsonEncode({'qrCode': qrCode});
 
@@ -297,7 +339,7 @@ class DatabaseService {
 
   // --- РАБОТА С МНОЖЕСТВЕННЫМИ ФОТО ---
 
-  Future<void> addOrderPhoto(
+  Future<String?> addOrderPhoto(
     String id,
     File imageFile,
     List<String> currentPhotos,
@@ -307,19 +349,24 @@ class DatabaseService {
         final uniqueSuffix = DateTime.now().millisecondsSinceEpoch;
         final fileName = 'order_${id}_$uniqueSuffix.jpg';
 
-        await supabase.storage.from('packages').upload(fileName, imageFile);
-        final publicUrl =
-            supabase.storage.from('packages').getPublicUrl(fileName);
+        await supabase.storage.from('packages').upload(
+          fileName,
+          imageFile,
+          fileOptions: const FileOptions(upsert: true),
+        );
 
-        final updatedPhotos = List<String>.from(currentPhotos)..add(publicUrl);
+        final updatedPhotos = List<String>.from(currentPhotos)..add(fileName);
 
         await _sync.applyLocalOrderPatch(id, (o) {
-          if (!o.photos.contains(publicUrl)) o.photos.add(publicUrl);
+          if (!o.photos.contains(fileName)) {
+            o.photos = List<String>.from(o.photos)..add(fileName);
+          }
         });
 
         await supabase.from('orders').update({
           'url_photo': OrderModel.encodeList(updatedPhotos),
         }).eq('id', id);
+        return null;
       } catch (e) {
         rethrow;
       }
@@ -329,16 +376,16 @@ class DatabaseService {
         '${dir.path}/offline_${DateTime.now().millisecondsSinceEpoch}.jpg',
       );
       await _sync.applyLocalOrderPatch(id, (o) {
-        if (!o.photos.contains(localImage.path)) o.photos.add(localImage.path);
+        if (!o.photos.contains(localImage.path)) {
+          o.photos = List<String>.from(o.photos)..add(localImage.path);
+        }
       });
       await _sync.addTask(
         SyncActionType.addPhotoOffline,
         id,
         localImage.path,
       );
-      throw Exception(
-        'ОФФЛАЙН: Фото сохранено. Оно будет отправлено при появлении сети.',
-      );
+      return 'ОФФЛАЙН: Фото сохранено. Оно будет отправлено при появлении сети.';
     }
   }
 
@@ -349,6 +396,10 @@ class DatabaseService {
   ) async {
     try {
       final updatedPhotos = List<String>.from(currentPhotos)..remove(photoUrl);
+
+      await _sync.applyLocalOrderPatch(orderId, (o) {
+        o.photos = List<String>.from(o.photos)..remove(photoUrl);
+      });
 
       await supabase.from('orders').update({
         'url_photo': OrderModel.encodeList(updatedPhotos),
@@ -363,37 +414,56 @@ class DatabaseService {
 
   // --- РАБОТА С МНОЖЕСТВЕННЫМИ QR КОДАМИ ---
 
-  Future<void> addQrCode(
+  Future<String?> addQrCode(
     String id,
     String code,
     List<String> currentQrs,
     bool isClientQr,
   ) async {
+    if (currentQrs.contains(code)) return 'Этот код уже добавлен';
+
     if (await _isOnline()) {
       final updatedQrs = List<String>.from(currentQrs)..add(code);
       final column = isClientQr ? 'client_qr_code' : 'pvz_qr_code';
 
       await _sync.applyLocalOrderPatch(id, (o) {
-        final list = isClientQr ? o.clientQrCodes : o.pvzQrCodes;
-        if (!list.contains(code)) list.add(code);
+        if (isClientQr) {
+          if (!o.clientQrCodes.contains(code)) {
+            o.clientQrCodes = List<String>.from(o.clientQrCodes)..add(code);
+          }
+        } else {
+          if (!o.pvzQrCodes.contains(code)) {
+            o.pvzQrCodes = List<String>.from(o.pvzQrCodes)..add(code);
+          }
+        }
       });
 
-      await supabase.from('orders').update({
-        column: OrderModel.encodeList(updatedQrs),
-      }).eq('id', id);
+      try {
+        await supabase.from('orders').update({
+          column: OrderModel.encodeList(updatedQrs),
+        }).eq('id', id);
+        return null;
+      } catch (e) {
+        return 'Ошибка сохранения: слишком много кодов?';
+      }
     } else {
       await _sync.applyLocalOrderPatch(id, (o) {
-        final list = isClientQr ? o.clientQrCodes : o.pvzQrCodes;
-        if (!list.contains(code)) list.add(code);
+        if (isClientQr) {
+          if (!o.clientQrCodes.contains(code)) {
+            o.clientQrCodes = List<String>.from(o.clientQrCodes)..add(code);
+          }
+        } else {
+          if (!o.pvzQrCodes.contains(code)) {
+            o.pvzQrCodes = List<String>.from(o.pvzQrCodes)..add(code);
+          }
+        }
       });
       await _sync.addTask(
         isClientQr ? SyncActionType.addClientQr : SyncActionType.addPvzQr,
         id,
         code,
       );
-      throw Exception(
-        'ОФФЛАЙН: Штрих-код сохранен. Он будет отправлен при появлении сети.',
-      );
+      return 'ОФФЛАЙН: Штрих-код сохранен. Он будет отправлен при появлении сети.';
     }
   }
 
@@ -405,6 +475,15 @@ class DatabaseService {
   ) async {
     final updatedQrs = List<String>.from(currentQrs)..remove(code);
     final column = isClientQr ? 'client_qr_code' : 'pvz_qr_code';
+    
+    await _sync.applyLocalOrderPatch(id, (o) {
+      if (isClientQr) {
+        o.clientQrCodes = List<String>.from(o.clientQrCodes)..remove(code);
+      } else {
+        o.pvzQrCodes = List<String>.from(o.pvzQrCodes)..remove(code);
+      }
+    });
+
     await supabase.from('orders').update({
       column: OrderModel.encodeList(updatedQrs),
     }).eq('id', id);

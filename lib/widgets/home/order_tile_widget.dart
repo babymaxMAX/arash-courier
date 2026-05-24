@@ -1,13 +1,13 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:barcode_widget/barcode_widget.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:arash_curier/models/order_model.dart';
 import 'package:arash_curier/services/database_service.dart';
 import 'package:arash_curier/screens/qr_scanner_screen.dart';
 import 'package:arash_curier/screens/add_order_screen.dart';
 import 'package:arash_curier/dialogs/order_bottom_sheet.dart';
-import 'package:arash_curier/services/isar_service.dart';
 import 'package:arash_curier/utils/app_snackbar.dart';
 
 class OrderTileWidget extends StatefulWidget {
@@ -33,13 +33,16 @@ class _OrderTileWidgetState extends State<OrderTileWidget> {
   bool get isManager =>
       widget.userRole == 'manager' || widget.userRole == 'admin';
 
-  Future<void> _run(Future<void> Function() action, {String? success}) async {
+  Future<void> _run(Future<dynamic> Function() action, {String? success}) async {
     if (_busy) return;
     setState(() => _busy = true);
     try {
-      await action();
+      final customMessage = await action();
       if (!mounted) return;
-      if (success != null) showAppSnackBar(context, success);
+      
+      final msgToShow = (customMessage is String) ? customMessage : success;
+      if (msgToShow != null) showAppSnackBar(context, msgToShow);
+      
       widget.onRefresh();
     } catch (e) {
       if (mounted) showAppSnackBar(context, 'Ошибка: $e', isError: true);
@@ -52,7 +55,11 @@ class _OrderTileWidgetState extends State<OrderTileWidget> {
     if (path.startsWith('http://') || path.startsWith('https://')) {
       return NetworkImage(path);
     }
-    return FileImage(File(path));
+    if (path.startsWith('/')) {
+      return FileImage(File(path));
+    }
+    final publicUrl = DatabaseService().supabase.storage.from('packages').getPublicUrl(path);
+    return NetworkImage(publicUrl);
   }
 
   Future<void> _addPhoto() async {
@@ -72,16 +79,191 @@ class _OrderTileWidgetState extends State<OrderTileWidget> {
     );
   }
 
-  Future<void> _addQr(bool isClient) async {
+  void _showPhotoOptions(String photoUrl) {
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              height: 250,
+              width: double.infinity,
+              decoration: BoxDecoration(
+                image: DecorationImage(
+                  image: _photoImage(photoUrl),
+                  fit: BoxFit.cover,
+                ),
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.cameraswitch, color: Colors.blue),
+              title: const Text('Заменить фото'),
+              onTap: () async {
+                Navigator.pop(ctx);
+                final picker = ImagePicker();
+                final file = await picker.pickImage(
+                  source: ImageSource.camera,
+                  imageQuality: 80,
+                );
+                if (file == null) return;
+                
+                await _run(() async {
+                  await DatabaseService().addOrderPhoto(order.id, File(file.path), order.photos);
+                  await DatabaseService().removeOrderPhoto(order.id, photoUrl, order.photos);
+                  return 'Фото заменено';
+                });
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete, color: Colors.red),
+              title: const Text('Удалить фото', style: TextStyle(color: Colors.red)),
+              onTap: () {
+                Navigator.pop(ctx);
+                _run(
+                  () => DatabaseService().removeOrderPhoto(
+                    order.id,
+                    photoUrl,
+                    order.photos,
+                  ),
+                  success: 'Фото удалено',
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showQrOptions(String qrCode, bool isClient) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.only(bottom: 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 20),
+              Text(
+                isClient ? 'Штрих-код курьера (на посылку)' : 'Штрих-код менеджера',
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 20),
+              Container(
+                padding: const EdgeInsets.all(16),
+                margin: const EdgeInsets.symmetric(horizontal: 24),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.1),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: BarcodeWidget(
+                  barcode: Barcode.code128(),
+                  data: qrCode,
+                  height: 100.0,
+                  drawText: false,
+                  errorBuilder: (context, error) => Center(child: Text(error)),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                child: Text(
+                  qrCode,
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500, color: Colors.black54),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Divider(),
+              ListTile(
+                leading: const Icon(Icons.qr_code_scanner, color: Colors.blue),
+                title: const Text('Заменить штрих-код'),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  final newCode = await Navigator.push<String>(
+                    context,
+                    MaterialPageRoute(builder: (context) => const QRScannerScreen()),
+                  );
+                  if (newCode == null || newCode.isEmpty) return;
+                  
+                  await _run(() async {
+                    final currentList = isClient ? order.clientQrCodes : order.pvzQrCodes;
+                    await DatabaseService().addQrCode(order.id, newCode, currentList, isClient);
+                    
+                    final listAfterAdd = isClient ? order.clientQrCodes : order.pvzQrCodes;
+                    await DatabaseService().removeQrCode(order.id, qrCode, listAfterAdd, isClient);
+                    return 'Штрих-код заменен';
+                  });
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.delete, color: Colors.red),
+                title: const Text('Удалить штрих-код', style: TextStyle(color: Colors.red)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _run(
+                    () => DatabaseService().removeQrCode(
+                      order.id,
+                      qrCode,
+                      isClient ? order.clientQrCodes : order.pvzQrCodes,
+                      isClient,
+                    ),
+                    success: 'Штрих-код удален',
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _addQr() async {
+    bool isClient = true;
+
+    if (isManager) {
+      final choice = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Какой штрих-код?'),
+          content: const Text('Выберите тип сканируемого кода:'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Штрих-код менеджера'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Штрих-код курьера'),
+            ),
+          ],
+        ),
+      );
+      if (choice == null || !mounted) return;
+      isClient = choice;
+    }
+
     final code = await Navigator.push<String>(
       context,
       MaterialPageRoute(builder: (context) => const QRScannerScreen()),
     );
+    if (!mounted) return;
     if (code == null || code.isEmpty) return;
     final currentList = isClient ? order.clientQrCodes : order.pvzQrCodes;
     await _run(
       () => DatabaseService().addQrCode(order.id, code, currentList, isClient),
-      success: 'QR код добавлен',
+      success: 'Штрих-код добавлен',
     );
   }
 
@@ -93,9 +275,10 @@ class _OrderTileWidgetState extends State<OrderTileWidget> {
       ),
     );
 
+    if (!mounted) return;
     if (result != null) {
       await _run(
-        () => DatabaseService(isar).updateOrder(result),
+        () => DatabaseService().updateOrder(result),
         success: 'Заказ успешно обновлен!',
       );
     }
@@ -103,32 +286,47 @@ class _OrderTileWidgetState extends State<OrderTileWidget> {
 
   @override
   Widget build(BuildContext context) {
-    final isDone = order.status == 'Готово';
+    final isDone = order.status == 'Готово' || order.status == 'SHIPPING';
     final isDelayed = order.status == 'Отложено';
     final shortId = order.id.length > 8
         ? order.id.substring(0, 8).toUpperCase()
         : order.id.toUpperCase();
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      child: Material(
-        color: isDone
-            ? const Color(0xFFF1F8E9)
-            : (isDelayed ? Colors.grey.shade200 : Colors.white),
-        borderRadius: BorderRadius.circular(16),
-        elevation: isDone ? 0 : 2,
-        child: InkWell(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 300),
+        decoration: BoxDecoration(
+          color: isDone
+              ? const Color(0xFFF1FAEE) // Светло-зеленый
+              : (isDelayed ? Colors.grey.shade100 : Colors.white), // Оранжевый для новых
           borderRadius: BorderRadius.circular(16),
-          onDoubleTap: () => OrderBottomSheet.show(
-            context,
-            order: order,
-            onRefresh: widget.onRefresh,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: isDone ? 0.02 : 0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+          border: Border.all(
+            color: isDone ? Colors.green.shade200 : (isDelayed ? Colors.grey.shade300 : Colors.orange.shade200),
+            width: 1,
           ),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(16),
+            onDoubleTap: () => OrderBottomSheet.show(
+              context,
+              order: order,
+              onRefresh: widget.onRefresh,
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                 Row(
                   children: [
                     Icon(Icons.inventory_2_outlined,
@@ -157,24 +355,48 @@ class _OrderTileWidgetState extends State<OrderTileWidget> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     GestureDetector(
-                      onTap: _busy
+                      onTap: () {
+                        showAppSnackBar(
+                            context, 'Удерживайте галочку, чтобы завершить заказ');
+                      },
+                      onLongPress: _busy
                           ? null
                           : () => _run(
                                 () => DatabaseService().updateOrderStatus(
                                   order.id,
-                                  isDone ? 'SHIPPING' : 'READY',
+                                  isDone ? 'NEW' : 'READY',
                                 ),
+                                success: isDone
+                                    ? 'Статус сброшен'
+                                    : 'Заказ завершен!',
                               ),
-                      child: Container(
-                        width: 44,
-                        height: 44,
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 300),
+                        width: 46,
+                        height: 46,
                         decoration: BoxDecoration(
-                          color: isDone ? Colors.green : Colors.grey.shade300,
-                          borderRadius: BorderRadius.circular(12),
+                          color: isDone ? Colors.green : Colors.grey.shade100,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: isDone ? Colors.green : Colors.grey.shade300,
+                            width: 2,
+                          ),
+                          boxShadow: isDone ? [
+                            BoxShadow(
+                              color: Colors.green.withValues(alpha: 0.3),
+                              blurRadius: 8,
+                              offset: const Offset(0, 4),
+                            )
+                          ] : null,
                         ),
-                        child: Icon(
-                          isDone ? Icons.check : Icons.circle_outlined,
-                          color: Colors.white,
+                        child: AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 200),
+                          child: Icon(
+                            isDone ? Icons.check_rounded : Icons.circle_outlined,
+                            key: ValueKey(isDone),
+                            color: isDone ? Colors.white : Colors.grey.shade400,
+                            size: 28,
+                          ),
                         ),
                       ),
                     ),
@@ -192,12 +414,19 @@ class _OrderTileWidgetState extends State<OrderTileWidget> {
                                   isDone ? TextDecoration.lineThrough : null,
                             ),
                           ),
-                          Text(
-                            order.deliveryCity.isEmpty
-                                ? 'Город не указан'
-                                : order.deliveryCity,
-                            style: TextStyle(color: Colors.grey.shade600),
-                          ),
+                          if (order.companyName.toLowerCase() == 'другое' && order.companyAddress.isEmpty)
+                            const Text(
+                              'АДРЕС НЕ УКАЗАН!',
+                              style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 12),
+                            )
+                          else
+                            Text(
+                              [
+                                if (order.deliveryCity.isNotEmpty) order.deliveryCity else 'Город не указан',
+                                if (order.companyAddress.isNotEmpty) order.companyAddress,
+                              ].join(', '),
+                              style: TextStyle(color: Colors.grey.shade600),
+                            ),
                         ],
                       ),
                     ),
@@ -232,14 +461,7 @@ class _OrderTileWidgetState extends State<OrderTileWidget> {
                         scrollDirection: Axis.horizontal,
                         itemCount: order.photos.length,
                         itemBuilder: (ctx, i) => GestureDetector(
-                          onLongPress: () => _run(
-                            () => DatabaseService().removeOrderPhoto(
-                              order.id,
-                              order.photos[i],
-                              order.photos,
-                            ),
-                            success: 'Фото удалено',
-                          ),
+                          onTap: () => _showPhotoOptions(order.photos[i]),
                           child: Container(
                             margin: const EdgeInsets.only(right: 8),
                             width: 50,
@@ -259,12 +481,14 @@ class _OrderTileWidgetState extends State<OrderTileWidget> {
                     spacing: 8,
                     children: [
                       ...order.clientQrCodes.map(
-                        (qr) => Chip(
-                          label: const Text(
-                            'КЛИЕНТ',
-                            style: TextStyle(fontSize: 10, color: Colors.white),
+                        (qr) => InputChip(
+                          label: Text(
+                            'КУРЬЕР: $qr',
+                            style: const TextStyle(fontSize: 10, color: Colors.white),
                           ),
                           backgroundColor: Colors.blue.shade600,
+                          deleteIconColor: Colors.white,
+                          onPressed: () => _showQrOptions(qr, true),
                           onDeleted: () => _run(
                             () => DatabaseService().removeQrCode(
                               order.id,
@@ -276,12 +500,14 @@ class _OrderTileWidgetState extends State<OrderTileWidget> {
                         ),
                       ),
                       ...order.pvzQrCodes.map(
-                        (qr) => Chip(
-                          label: const Text(
-                            'ПВЗ',
-                            style: TextStyle(fontSize: 10, color: Colors.white),
+                        (qr) => InputChip(
+                          label: Text(
+                            'МЕНЕДЖЕР: $qr',
+                            style: const TextStyle(fontSize: 10, color: Colors.white),
                           ),
                           backgroundColor: Colors.green.shade600,
+                          deleteIconColor: Colors.white,
+                          onPressed: () => _showQrOptions(qr, false),
                           onDeleted: () => _run(
                             () => DatabaseService().removeQrCode(
                               order.id,
@@ -307,13 +533,7 @@ class _OrderTileWidgetState extends State<OrderTileWidget> {
                     _ActionButton(
                       icon: Icons.qr_code_scanner,
                       color: Colors.blue,
-                      onTap: () => _addQr(true),
-                    ),
-                    const SizedBox(width: 8),
-                    _ActionButton(
-                      icon: Icons.inventory_2_outlined,
-                      color: Colors.teal,
-                      onTap: () => _addQr(false),
+                      onTap: _addQr,
                     ),
                   ],
                 ),
@@ -322,8 +542,9 @@ class _OrderTileWidgetState extends State<OrderTileWidget> {
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 }
 
 class _ActionButton extends StatelessWidget {

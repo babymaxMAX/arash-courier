@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 class AppTheme {
   static const Color primary = Color(0xFFE65100);
@@ -14,8 +15,11 @@ class AppTheme {
       surface: surface,
     );
 
+    final textTheme = GoogleFonts.montserratTextTheme();
+
     return ThemeData(
       useMaterial3: true,
+      textTheme: textTheme,
       colorScheme: base.copyWith(
         primary: primary,
         onPrimary: Colors.white,
@@ -23,15 +27,15 @@ class AppTheme {
         surface: surface,
       ),
       scaffoldBackgroundColor: surface,
-      appBarTheme: const AppBarTheme(
+      appBarTheme: AppBarTheme(
         centerTitle: false,
         elevation: 0,
         scrolledUnderElevation: 2,
         systemOverlayStyle: SystemUiOverlayStyle.dark,
-        titleTextStyle: TextStyle(
+        titleTextStyle: GoogleFonts.montserrat(
           fontSize: 20,
-          fontWeight: FontWeight.w700,
-          color: Color(0xFF1A1A2E),
+          fontWeight: FontWeight.w800,
+          color: Colors.white,
         ),
       ),
       cardTheme: CardThemeData(
@@ -69,9 +73,9 @@ class AppTheme {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(14),
           ),
-          textStyle: const TextStyle(
+          textStyle: GoogleFonts.montserrat(
             fontSize: 16,
-            fontWeight: FontWeight.w600,
+            fontWeight: FontWeight.w700,
           ),
         ),
       ),

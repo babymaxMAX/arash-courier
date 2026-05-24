@@ -40,10 +40,7 @@ class OrderBottomSheet {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => ChatScreen(
-                        orderId: order.id,
-                        orderTitle: order.clientName,
-                      ),
+                      builder: (context) => const ChatScreen(),
                     ),
                   );
                 },

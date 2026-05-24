@@ -53,6 +53,8 @@
 	<string>Приложению требуется доступ к камере для сканирования штрих-кодов и фотографирования посылок.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Приложению требуется доступ к галерее для выбора фотографий посылок.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Приложению требуется доступ для сохранения фотографий посылок.</string>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>

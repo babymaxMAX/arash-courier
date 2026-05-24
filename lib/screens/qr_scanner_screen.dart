@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 // Пакет сканирования штрих-/QR-кодов через камеру.
 import 'package:mobile_scanner/mobile_scanner.dart';
 
+import 'package:arash_curier/utils/camera_permission.dart';
+
 // Экран камеры; результат — Navigator.pop(context, строка QR).
 class QRScannerScreen extends StatefulWidget {
   const QRScannerScreen({super.key});
@@ -13,27 +15,46 @@ class QRScannerScreen extends StatefulWidget {
 
 // Состояние экрана сканера (контроллер камеры, флаг однократного считывания).
 class _QRScannerScreenState extends State<QRScannerScreen> {
-  // late — инициализируем в initState до первого использования.
-  late MobileScannerController controller;
+  MobileScannerController? controller;
 
   // true после первого успешного скана — блокирует повторные pop.
   bool isScanned = false;
 
+  bool _loading = true;
+  bool _denied = false;
+
   @override
   void initState() {
-    super.initState(); // Обязательный вызов родителя State.
+    super.initState();
+    _initCamera();
+  }
 
-    // Создаём контроллер с настройками камеры и форматов кодов.
+  Future<void> _initCamera() async {
+    final granted = await ensureCameraPermission(context);
+    if (!mounted) return;
+
+    if (!granted) {
+      setState(() {
+        _loading = false;
+        _denied = true;
+      });
+      return;
+    }
+
     controller = MobileScannerController(
-      formats: const [BarcodeFormat.all], // Все поддерживаемые форматы штрихкодов.
-      facing: CameraFacing.back, // Задняя камера телефона.
-      detectionSpeed: DetectionSpeed.normal, // Баланс скорости и нагрузки на CPU.
+      formats: const [BarcodeFormat.all],
+      facing: CameraFacing.back,
+      detectionSpeed: DetectionSpeed.normal,
     );
+
+    if (mounted) {
+      setState(() => _loading = false);
+    }
   }
 
   @override
   void dispose() {
-    controller.dispose(); // Освобождаем камеру и нативные ресурсы.
+    controller?.dispose();
     super.dispose();
   }
 
@@ -41,26 +62,71 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Сканировать штрих-код'), // Заголовок в AppBar.
-        backgroundColor: Colors.deepOrange, // Фон полосы сверху.
-        foregroundColor: Colors.white, // Цвет текста и иконок AppBar.
+        title: const Text('Сканировать штрих-код'),
+        backgroundColor: Colors.deepOrange,
+        foregroundColor: Colors.white,
       ),
-      body: MobileScanner(
-        controller: controller, // Привязка нашего контроллера к виджету превью.
-        onDetect: (capture) {
-          // Обрабатываем только если ещё не вернули результат.
-          if (!isScanned) {
-            final List<Barcode> barcodes = capture.barcodes; // Список найденных кодов в кадре.
-            for (final barcode in barcodes) {
-              if (barcode.rawValue != null) {
-                isScanned = true; // Блокируем повторное срабатывание.
-                Navigator.pop(context, barcode.rawValue); // Возврат строки QR на HomeScreen.
-                break; // Достаточно первого валидного кода.
-              }
+      body: _buildBody(),
+    );
+  }
+
+  Widget _buildBody() {
+    if (_loading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_denied || controller == null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.no_photography, size: 64, color: Colors.grey),
+              const SizedBox(height: 16),
+              const Text(
+                'Нет доступа к камере',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Разрешите камеру в настройках iPhone, затем откройте сканер снова.',
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              FilledButton(
+                onPressed: () async {
+                  await ensureCameraPermission(context);
+                  if (!mounted) return;
+                  setState(() {
+                    _loading = true;
+                    _denied = false;
+                  });
+                  await _initCamera();
+                },
+                child: const Text('Повторить'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return MobileScanner(
+      controller: controller!,
+      onDetect: (capture) {
+        if (!isScanned) {
+          final List<Barcode> barcodes = capture.barcodes;
+          for (final barcode in barcodes) {
+            if (barcode.rawValue != null) {
+              isScanned = true;
+              Navigator.pop(context, barcode.rawValue);
+              break;
             }
           }
-        },
-      ),
+        }
+      },
     );
   }
 }

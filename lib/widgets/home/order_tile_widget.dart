@@ -9,6 +9,7 @@ import 'package:arash_curier/screens/qr_scanner_screen.dart';
 import 'package:arash_curier/screens/add_order_screen.dart';
 import 'package:arash_curier/dialogs/order_bottom_sheet.dart';
 import 'package:arash_curier/utils/app_snackbar.dart';
+import 'package:arash_curier/utils/camera_permission.dart';
 
 class OrderTileWidget extends StatefulWidget {
   final OrderModel order;
@@ -63,6 +64,8 @@ class _OrderTileWidgetState extends State<OrderTileWidget> {
   }
 
   Future<void> _addPhoto() async {
+    if (!await ensureCameraPermission(context)) return;
+
     final picker = ImagePicker();
     final file = await picker.pickImage(
       source: ImageSource.camera,
@@ -101,6 +104,8 @@ class _OrderTileWidgetState extends State<OrderTileWidget> {
               title: const Text('Заменить фото'),
               onTap: () async {
                 Navigator.pop(ctx);
+                if (!await ensureCameraPermission(context)) return;
+
                 final picker = ImagePicker();
                 final file = await picker.pickImage(
                   source: ImageSource.camera,

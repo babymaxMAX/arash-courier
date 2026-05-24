@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:isar/isar.dart';
 
 part 'order_model.g.dart';
@@ -7,7 +9,6 @@ part 'order_model.g.dart';
 class OrderModel {
   Id isarId = Isar.autoIncrement;
 
-  /// UUID / id строки в Supabase (уникальный ключ синхронизации).
   @Index(unique: true, replace: true)
   late String id;
 
@@ -21,9 +22,14 @@ class OrderModel {
   late String clientName;
   late String deliveryCity;
 
-  late String pvzQrCode;
-  late String clientQrCode;
-  late String urlPhoto;
+  /// Список URL фото (в Supabase — JSON-массив в колонке url_photo).
+  List<String> photos = [];
+
+  /// QR-коды клиента.
+  List<String> clientQrCodes = [];
+
+  /// QR-коды ПВЗ.
+  List<String> pvzQrCodes = [];
 
   late String status;
   String? comment;
@@ -39,6 +45,31 @@ class OrderModel {
 
   OrderModel();
 
+  /// Парсит старый формат (одна строка) и новый (JSON-массив).
+  static List<String> parseList(dynamic value) {
+    if (value == null) return [];
+    if (value is String) {
+      if (value.startsWith('[')) {
+        try {
+          return List<String>.from(jsonDecode(value));
+        } catch (_) {}
+      }
+      if (value.isNotEmpty) return [value];
+      return [];
+    }
+    if (value is List) {
+      return value.map((e) => e.toString()).where((s) => s.isNotEmpty).toList();
+    }
+    return [];
+  }
+
+  static String encodeList(List<String> items) {
+    final cleaned =
+        items.map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+    if (cleaned.isEmpty) return '';
+    return jsonEncode(cleaned);
+  }
+
   factory OrderModel.create({
     required String id,
     required DateTime dateCreated,
@@ -48,9 +79,9 @@ class OrderModel {
     required String responsiblePerson,
     required String clientName,
     required String deliveryCity,
-    required String pvzQrCode,
-    required String clientQrCode,
-    required String urlPhoto,
+    List<String>? photos,
+    List<String>? clientQrCodes,
+    List<String>? pvzQrCodes,
     required String status,
     String? comment,
     String? cancelReason,
@@ -68,9 +99,9 @@ class OrderModel {
       ..responsiblePerson = responsiblePerson
       ..clientName = clientName
       ..deliveryCity = deliveryCity
-      ..pvzQrCode = pvzQrCode
-      ..clientQrCode = clientQrCode
-      ..urlPhoto = urlPhoto
+      ..photos = photos ?? []
+      ..clientQrCodes = clientQrCodes ?? []
+      ..pvzQrCodes = pvzQrCodes ?? []
       ..status = status
       ..comment = comment
       ..cancelReason = cancelReason
@@ -89,9 +120,9 @@ class OrderModel {
     String? responsiblePerson,
     String? clientName,
     String? deliveryCity,
-    String? pvzQrCode,
-    String? clientQrCode,
-    String? urlPhoto,
+    List<String>? photos,
+    List<String>? clientQrCodes,
+    List<String>? pvzQrCodes,
     String? status,
     String? comment,
     String? cancelReason,
@@ -109,9 +140,9 @@ class OrderModel {
       responsiblePerson: responsiblePerson ?? this.responsiblePerson,
       clientName: clientName ?? this.clientName,
       deliveryCity: deliveryCity ?? this.deliveryCity,
-      pvzQrCode: pvzQrCode ?? this.pvzQrCode,
-      clientQrCode: clientQrCode ?? this.clientQrCode,
-      urlPhoto: urlPhoto ?? this.urlPhoto,
+      photos: photos ?? List<String>.from(this.photos),
+      clientQrCodes: clientQrCodes ?? List<String>.from(this.clientQrCodes),
+      pvzQrCodes: pvzQrCodes ?? List<String>.from(this.pvzQrCodes),
       status: status ?? this.status,
       comment: comment ?? this.comment,
       cancelReason: cancelReason ?? this.cancelReason,
@@ -126,24 +157,24 @@ class OrderModel {
     return OrderModel.create(
       id: json['id']?.toString() ?? 'ОШИБКА_ID',
       dateCreated: json['date_created'] != null
-          ? DateTime.parse(json['date_created'])
+          ? DateTime.parse(json['date_created'].toString())
           : DateTime.now(),
       dateUpdated: json['updated_at'] != null
-          ? DateTime.parse(json['updated_at'])
+          ? DateTime.parse(json['updated_at'].toString())
           : (json['date_updated'] != null
-              ? DateTime.parse(json['date_updated'])
+              ? DateTime.parse(json['date_updated'].toString())
               : DateTime.now()),
       companyName: json['company_name'] ?? 'Неизвестная компания',
       companyAddress: json['company_address'] ?? 'Адрес не указан',
       responsiblePerson: json['responsible_person'] ?? '',
       clientName: json['client_name'] ?? 'Без имени',
       deliveryCity: json['delivery_city'] ?? '',
-      pvzQrCode: json['pvz_qr_code'] ?? '',
-      clientQrCode: json['client_qr_code'] ?? '',
-      urlPhoto: json['url_photo'] ?? '',
+      photos: parseList(json['url_photo']),
+      clientQrCodes: parseList(json['client_qr_code']),
+      pvzQrCodes: parseList(json['pvz_qr_code']),
       status: _translateStatus(json['status']?.toString() ?? 'New'),
-      comment: json['comment'],
-      cancelReason: json['cancel_reason'],
+      comment: json['comment']?.toString(),
+      cancelReason: json['cancel_reason']?.toString(),
       clientPayment: (json['client_payment'] as num?)?.toDouble() ?? 0.0,
       debtAmount: (json['debt_amount'] as num?)?.toDouble() ?? 0.0,
       deliveryPrice: (json['delivery_price'] as num?)?.toDouble() ?? 0.0,
@@ -202,9 +233,9 @@ class OrderModel {
       'responsible_person': responsiblePerson,
       'client_name': clientName,
       'delivery_city': deliveryCity,
-      'pvz_qr_code': pvzQrCode,
-      'client_qr_code': clientQrCode,
-      'url_photo': urlPhoto,
+      'url_photo': encodeList(photos),
+      'client_qr_code': encodeList(clientQrCodes),
+      'pvz_qr_code': encodeList(pvzQrCodes),
       'status': status,
       'comment': comment,
       'cancel_reason': cancelReason,

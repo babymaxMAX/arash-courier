@@ -148,7 +148,9 @@ class DatabaseService {
 
   Future<String?> uploadOrderPhoto(String id, File imageFile) async {
     final localPath = imageFile.path;
-    await _sync.applyLocalOrderPatch(id, (o) => o.urlPhoto = localPath);
+    await _sync.applyLocalOrderPatch(id, (o) {
+      if (!o.photos.contains(localPath)) o.photos.add(localPath);
+    });
     final payload = jsonEncode({'localPath': localPath});
 
     if (await _isOnline()) {
@@ -162,7 +164,11 @@ class DatabaseService {
         final baseUrl =
             supabase.storage.from('packages').getPublicUrl(fileName);
         final url = '$baseUrl?t=${DateTime.now().millisecondsSinceEpoch}';
-        await supabase.from('orders').update({'url_photo': url}).eq('id', id);
+        await supabase.from('orders').update({
+          'url_photo': OrderModel.encodeList(
+            [...(await _fetchPhotoUrls(id)), url],
+          ),
+        }).eq('id', id);
         return url;
       } catch (e) {
         await _sync.addTask(SyncActionType.addPhoto, id, payload);
@@ -174,16 +180,28 @@ class DatabaseService {
     return localPath;
   }
 
+  Future<List<String>> _fetchPhotoUrls(String id) async {
+    final row = await supabase
+        .from('orders')
+        .select('url_photo')
+        .eq('id', id)
+        .maybeSingle();
+    return OrderModel.parseList(row?['url_photo']);
+  }
+
   Future<void> updatePvzQr(String id, String qrCode) async {
-    await _sync.applyLocalOrderPatch(id, (o) => o.pvzQrCode = qrCode);
+    await _sync.applyLocalOrderPatch(id, (o) {
+      if (!o.pvzQrCodes.contains(qrCode)) o.pvzQrCodes.add(qrCode);
+    });
     final payload = jsonEncode({'qrCode': qrCode});
 
     if (await _isOnline()) {
       try {
-        await supabase
-            .from('orders')
-            .update({'pvz_qr_code': qrCode})
-            .eq('id', id);
+        await supabase.from('orders').update({
+          'pvz_qr_code': OrderModel.encodeList(
+            await _fetchPvzQrCodes(id, qrCode),
+          ),
+        }).eq('id', id);
         return;
       } catch (e) {
         await _sync.addTask(SyncActionType.updatePvzQr, id, payload);
@@ -194,16 +212,30 @@ class DatabaseService {
     await _sync.addTask(SyncActionType.updatePvzQr, id, payload);
   }
 
+  Future<List<String>> _fetchPvzQrCodes(String id, String newCode) async {
+    final row = await supabase
+        .from('orders')
+        .select('pvz_qr_code')
+        .eq('id', id)
+        .maybeSingle();
+    final list = OrderModel.parseList(row?['pvz_qr_code']);
+    if (!list.contains(newCode)) list.add(newCode);
+    return list;
+  }
+
   Future<void> updateOrderQr(String id, String qrCode) async {
-    await _sync.applyLocalOrderPatch(id, (o) => o.clientQrCode = qrCode);
+    await _sync.applyLocalOrderPatch(id, (o) {
+      if (!o.clientQrCodes.contains(qrCode)) o.clientQrCodes.add(qrCode);
+    });
     final payload = jsonEncode({'qrCode': qrCode});
 
     if (await _isOnline()) {
       try {
-        await supabase
-            .from('orders')
-            .update({'client_qr_code': qrCode})
-            .eq('id', id);
+        await supabase.from('orders').update({
+          'client_qr_code': OrderModel.encodeList(
+            await _fetchClientQrCodes(id, qrCode),
+          ),
+        }).eq('id', id);
         return;
       } catch (e) {
         await _sync.addTask(SyncActionType.updateClientQr, id, payload);
@@ -214,8 +246,19 @@ class DatabaseService {
     await _sync.addTask(SyncActionType.updateClientQr, id, payload);
   }
 
+  Future<List<String>> _fetchClientQrCodes(String id, String newCode) async {
+    final row = await supabase
+        .from('orders')
+        .select('client_qr_code')
+        .eq('id', id)
+        .maybeSingle();
+    final list = OrderModel.parseList(row?['client_qr_code']);
+    if (!list.contains(newCode)) list.add(newCode);
+    return list;
+  }
+
   Future<void> clearOrderPhoto(String id) async {
-    await _sync.applyLocalOrderPatch(id, (o) => o.urlPhoto = '');
+    await _sync.applyLocalOrderPatch(id, (o) => o.photos = []);
     const payload = '{}';
 
     if (await _isOnline()) {
@@ -232,7 +275,7 @@ class DatabaseService {
   }
 
   Future<void> clearOrderQr(String id) async {
-    await _sync.applyLocalOrderPatch(id, (o) => o.clientQrCode = '');
+    await _sync.applyLocalOrderPatch(id, (o) => o.clientQrCodes = []);
     const payload = '{}';
 
     if (await _isOnline()) {

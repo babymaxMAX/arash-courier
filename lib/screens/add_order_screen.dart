@@ -41,9 +41,9 @@ class _AddOrderScreenState extends State<AddOrderScreen> {
       _companyAddressController.text = widget.order!.companyAddress;
       _responsiblePersonController.text = widget.order!.responsiblePerson;
       _deliveryCityController.text = widget.order!.deliveryCity;
-      _pvzQrCodeController.text = widget.order!.pvzQrCode;
-      _clientQrCodeController.text = widget.order!.clientQrCode;
-      _urlPhotoController.text = widget.order!.urlPhoto;
+      _pvzQrCodeController.text = widget.order!.pvzQrCodes.join(', ');
+      _clientQrCodeController.text = widget.order!.clientQrCodes.join(', ');
+      _urlPhotoController.text = widget.order!.photos.join(', ');
       _statusController.text = widget.order!.status;
       _commentController.text = widget.order!.comment ?? '';
       _cancelReasonController.text = widget.order!.cancelReason ?? '';
@@ -76,6 +76,9 @@ class _AddOrderScreenState extends State<AddOrderScreen> {
     super.dispose();
   }
 
+  List<String> _splitList(String raw) =>
+      raw.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+
   void _saveOrder() {
     if (!_formKey.currentState!.validate()) {
       return; // Есть ошибки валидации — не сохраняем.
@@ -92,9 +95,9 @@ class _AddOrderScreenState extends State<AddOrderScreen> {
       responsiblePerson: _responsiblePersonController.text.trim(),
       clientName: _clientNameController.text.trim(),
       deliveryCity: _deliveryCityController.text.trim(),
-      pvzQrCode: _pvzQrCodeController.text.trim(),
-      clientQrCode: _clientQrCodeController.text.trim(),
-      urlPhoto: _urlPhotoController.text.trim(),
+      pvzQrCodes: _splitList(_pvzQrCodeController.text),
+      clientQrCodes: _splitList(_clientQrCodeController.text),
+      photos: _splitList(_urlPhotoController.text),
       status: _statusController.text.trim(),
       comment: _commentController.text.trim().isEmpty
           ? null
@@ -150,17 +153,17 @@ class _AddOrderScreenState extends State<AddOrderScreen> {
               ),
               AppTextField(
                 controller: _pvzQrCodeController,
-                label: 'QR-код ПВЗ',
+                label: 'QR-коды ПВЗ (через запятую)',
                 icon: Icons.qr_code,
               ),
               AppTextField(
                 controller: _clientQrCodeController,
-                label: 'QR-код клиента',
+                label: 'QR-коды клиента (через запятую)',
                 icon: Icons.qr_code,
               ),
               AppTextField(
                 controller: _urlPhotoController,
-                label: 'URL фото',
+                label: 'URL фото (через запятую)',
                 icon: Icons.photo,
                 isRequired: false,
               ),

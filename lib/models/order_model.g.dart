@@ -32,10 +32,10 @@ const OrderModelSchema = CollectionSchema(
       name: r'clientPayment',
       type: IsarType.double,
     ),
-    r'clientQrCode': PropertySchema(
+    r'clientQrCodes': PropertySchema(
       id: 3,
-      name: r'clientQrCode',
-      type: IsarType.string,
+      name: r'clientQrCodes',
+      type: IsarType.stringList,
     ),
     r'comment': PropertySchema(
       id: 4,
@@ -82,35 +82,35 @@ const OrderModelSchema = CollectionSchema(
       name: r'id',
       type: IsarType.string,
     ),
-    r'pointsDeduction': PropertySchema(
+    r'photos': PropertySchema(
       id: 13,
+      name: r'photos',
+      type: IsarType.stringList,
+    ),
+    r'pointsDeduction': PropertySchema(
+      id: 14,
       name: r'pointsDeduction',
       type: IsarType.double,
     ),
-    r'pvzQrCode': PropertySchema(
-      id: 14,
-      name: r'pvzQrCode',
-      type: IsarType.string,
+    r'pvzQrCodes': PropertySchema(
+      id: 15,
+      name: r'pvzQrCodes',
+      type: IsarType.stringList,
     ),
     r'responsiblePerson': PropertySchema(
-      id: 15,
+      id: 16,
       name: r'responsiblePerson',
       type: IsarType.string,
     ),
     r'status': PropertySchema(
-      id: 16,
+      id: 17,
       name: r'status',
       type: IsarType.string,
     ),
     r'totalAmount': PropertySchema(
-      id: 17,
+      id: 18,
       name: r'totalAmount',
       type: IsarType.double,
-    ),
-    r'urlPhoto': PropertySchema(
-      id: 18,
-      name: r'urlPhoto',
-      type: IsarType.string,
     )
   },
   estimateSize: _orderModelEstimateSize,
@@ -154,7 +154,13 @@ int _orderModelEstimateSize(
     }
   }
   bytesCount += 3 + object.clientName.length * 3;
-  bytesCount += 3 + object.clientQrCode.length * 3;
+  bytesCount += 3 + object.clientQrCodes.length * 3;
+  {
+    for (var i = 0; i < object.clientQrCodes.length; i++) {
+      final value = object.clientQrCodes[i];
+      bytesCount += value.length * 3;
+    }
+  }
   {
     final value = object.comment;
     if (value != null) {
@@ -165,10 +171,22 @@ int _orderModelEstimateSize(
   bytesCount += 3 + object.companyName.length * 3;
   bytesCount += 3 + object.deliveryCity.length * 3;
   bytesCount += 3 + object.id.length * 3;
-  bytesCount += 3 + object.pvzQrCode.length * 3;
+  bytesCount += 3 + object.photos.length * 3;
+  {
+    for (var i = 0; i < object.photos.length; i++) {
+      final value = object.photos[i];
+      bytesCount += value.length * 3;
+    }
+  }
+  bytesCount += 3 + object.pvzQrCodes.length * 3;
+  {
+    for (var i = 0; i < object.pvzQrCodes.length; i++) {
+      final value = object.pvzQrCodes[i];
+      bytesCount += value.length * 3;
+    }
+  }
   bytesCount += 3 + object.responsiblePerson.length * 3;
   bytesCount += 3 + object.status.length * 3;
-  bytesCount += 3 + object.urlPhoto.length * 3;
   return bytesCount;
 }
 
@@ -181,7 +199,7 @@ void _orderModelSerialize(
   writer.writeString(offsets[0], object.cancelReason);
   writer.writeString(offsets[1], object.clientName);
   writer.writeDouble(offsets[2], object.clientPayment);
-  writer.writeString(offsets[3], object.clientQrCode);
+  writer.writeStringList(offsets[3], object.clientQrCodes);
   writer.writeString(offsets[4], object.comment);
   writer.writeString(offsets[5], object.companyAddress);
   writer.writeString(offsets[6], object.companyName);
@@ -191,12 +209,12 @@ void _orderModelSerialize(
   writer.writeString(offsets[10], object.deliveryCity);
   writer.writeDouble(offsets[11], object.deliveryPrice);
   writer.writeString(offsets[12], object.id);
-  writer.writeDouble(offsets[13], object.pointsDeduction);
-  writer.writeString(offsets[14], object.pvzQrCode);
-  writer.writeString(offsets[15], object.responsiblePerson);
-  writer.writeString(offsets[16], object.status);
-  writer.writeDouble(offsets[17], object.totalAmount);
-  writer.writeString(offsets[18], object.urlPhoto);
+  writer.writeStringList(offsets[13], object.photos);
+  writer.writeDouble(offsets[14], object.pointsDeduction);
+  writer.writeStringList(offsets[15], object.pvzQrCodes);
+  writer.writeString(offsets[16], object.responsiblePerson);
+  writer.writeString(offsets[17], object.status);
+  writer.writeDouble(offsets[18], object.totalAmount);
 }
 
 OrderModel _orderModelDeserialize(
@@ -209,7 +227,7 @@ OrderModel _orderModelDeserialize(
   object.cancelReason = reader.readStringOrNull(offsets[0]);
   object.clientName = reader.readString(offsets[1]);
   object.clientPayment = reader.readDouble(offsets[2]);
-  object.clientQrCode = reader.readString(offsets[3]);
+  object.clientQrCodes = reader.readStringList(offsets[3]) ?? [];
   object.comment = reader.readStringOrNull(offsets[4]);
   object.companyAddress = reader.readString(offsets[5]);
   object.companyName = reader.readString(offsets[6]);
@@ -220,11 +238,11 @@ OrderModel _orderModelDeserialize(
   object.deliveryPrice = reader.readDouble(offsets[11]);
   object.id = reader.readString(offsets[12]);
   object.isarId = id;
-  object.pointsDeduction = reader.readDouble(offsets[13]);
-  object.pvzQrCode = reader.readString(offsets[14]);
-  object.responsiblePerson = reader.readString(offsets[15]);
-  object.status = reader.readString(offsets[16]);
-  object.urlPhoto = reader.readString(offsets[18]);
+  object.photos = reader.readStringList(offsets[13]) ?? [];
+  object.pointsDeduction = reader.readDouble(offsets[14]);
+  object.pvzQrCodes = reader.readStringList(offsets[15]) ?? [];
+  object.responsiblePerson = reader.readString(offsets[16]);
+  object.status = reader.readString(offsets[17]);
   return object;
 }
 
@@ -242,7 +260,7 @@ P _orderModelDeserializeProp<P>(
     case 2:
       return (reader.readDouble(offset)) as P;
     case 3:
-      return (reader.readString(offset)) as P;
+      return (reader.readStringList(offset) ?? []) as P;
     case 4:
       return (reader.readStringOrNull(offset)) as P;
     case 5:
@@ -262,17 +280,17 @@ P _orderModelDeserializeProp<P>(
     case 12:
       return (reader.readString(offset)) as P;
     case 13:
-      return (reader.readDouble(offset)) as P;
+      return (reader.readStringList(offset) ?? []) as P;
     case 14:
-      return (reader.readString(offset)) as P;
+      return (reader.readDouble(offset)) as P;
     case 15:
-      return (reader.readString(offset)) as P;
+      return (reader.readStringList(offset) ?? []) as P;
     case 16:
       return (reader.readString(offset)) as P;
     case 17:
-      return (reader.readDouble(offset)) as P;
-    case 18:
       return (reader.readString(offset)) as P;
+    case 18:
+      return (reader.readDouble(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
   }
@@ -827,13 +845,13 @@ extension OrderModelQueryFilter
   }
 
   QueryBuilder<OrderModel, OrderModel, QAfterFilterCondition>
-      clientQrCodeEqualTo(
+      clientQrCodesElementEqualTo(
     String value, {
     bool caseSensitive = true,
   }) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.equalTo(
-        property: r'clientQrCode',
+        property: r'clientQrCodes',
         value: value,
         caseSensitive: caseSensitive,
       ));
@@ -841,7 +859,7 @@ extension OrderModelQueryFilter
   }
 
   QueryBuilder<OrderModel, OrderModel, QAfterFilterCondition>
-      clientQrCodeGreaterThan(
+      clientQrCodesElementGreaterThan(
     String value, {
     bool include = false,
     bool caseSensitive = true,
@@ -849,7 +867,7 @@ extension OrderModelQueryFilter
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.greaterThan(
         include: include,
-        property: r'clientQrCode',
+        property: r'clientQrCodes',
         value: value,
         caseSensitive: caseSensitive,
       ));
@@ -857,7 +875,7 @@ extension OrderModelQueryFilter
   }
 
   QueryBuilder<OrderModel, OrderModel, QAfterFilterCondition>
-      clientQrCodeLessThan(
+      clientQrCodesElementLessThan(
     String value, {
     bool include = false,
     bool caseSensitive = true,
@@ -865,7 +883,7 @@ extension OrderModelQueryFilter
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.lessThan(
         include: include,
-        property: r'clientQrCode',
+        property: r'clientQrCodes',
         value: value,
         caseSensitive: caseSensitive,
       ));
@@ -873,7 +891,7 @@ extension OrderModelQueryFilter
   }
 
   QueryBuilder<OrderModel, OrderModel, QAfterFilterCondition>
-      clientQrCodeBetween(
+      clientQrCodesElementBetween(
     String lower,
     String upper, {
     bool includeLower = true,
@@ -882,7 +900,7 @@ extension OrderModelQueryFilter
   }) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.between(
-        property: r'clientQrCode',
+        property: r'clientQrCodes',
         lower: lower,
         includeLower: includeLower,
         upper: upper,
@@ -893,13 +911,13 @@ extension OrderModelQueryFilter
   }
 
   QueryBuilder<OrderModel, OrderModel, QAfterFilterCondition>
-      clientQrCodeStartsWith(
+      clientQrCodesElementStartsWith(
     String value, {
     bool caseSensitive = true,
   }) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.startsWith(
-        property: r'clientQrCode',
+        property: r'clientQrCodes',
         value: value,
         caseSensitive: caseSensitive,
       ));
@@ -907,13 +925,13 @@ extension OrderModelQueryFilter
   }
 
   QueryBuilder<OrderModel, OrderModel, QAfterFilterCondition>
-      clientQrCodeEndsWith(
+      clientQrCodesElementEndsWith(
     String value, {
     bool caseSensitive = true,
   }) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.endsWith(
-        property: r'clientQrCode',
+        property: r'clientQrCodes',
         value: value,
         caseSensitive: caseSensitive,
       ));
@@ -921,10 +939,10 @@ extension OrderModelQueryFilter
   }
 
   QueryBuilder<OrderModel, OrderModel, QAfterFilterCondition>
-      clientQrCodeContains(String value, {bool caseSensitive = true}) {
+      clientQrCodesElementContains(String value, {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.contains(
-        property: r'clientQrCode',
+        property: r'clientQrCodes',
         value: value,
         caseSensitive: caseSensitive,
       ));
@@ -932,10 +950,10 @@ extension OrderModelQueryFilter
   }
 
   QueryBuilder<OrderModel, OrderModel, QAfterFilterCondition>
-      clientQrCodeMatches(String pattern, {bool caseSensitive = true}) {
+      clientQrCodesElementMatches(String pattern, {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.matches(
-        property: r'clientQrCode',
+        property: r'clientQrCodes',
         wildcard: pattern,
         caseSensitive: caseSensitive,
       ));
@@ -943,22 +961,111 @@ extension OrderModelQueryFilter
   }
 
   QueryBuilder<OrderModel, OrderModel, QAfterFilterCondition>
-      clientQrCodeIsEmpty() {
+      clientQrCodesElementIsEmpty() {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.equalTo(
-        property: r'clientQrCode',
+        property: r'clientQrCodes',
         value: '',
       ));
     });
   }
 
   QueryBuilder<OrderModel, OrderModel, QAfterFilterCondition>
-      clientQrCodeIsNotEmpty() {
+      clientQrCodesElementIsNotEmpty() {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.greaterThan(
-        property: r'clientQrCode',
+        property: r'clientQrCodes',
         value: '',
       ));
+    });
+  }
+
+  QueryBuilder<OrderModel, OrderModel, QAfterFilterCondition>
+      clientQrCodesLengthEqualTo(int length) {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'clientQrCodes',
+        length,
+        true,
+        length,
+        true,
+      );
+    });
+  }
+
+  QueryBuilder<OrderModel, OrderModel, QAfterFilterCondition>
+      clientQrCodesIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'clientQrCodes',
+        0,
+        true,
+        0,
+        true,
+      );
+    });
+  }
+
+  QueryBuilder<OrderModel, OrderModel, QAfterFilterCondition>
+      clientQrCodesIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'clientQrCodes',
+        0,
+        false,
+        999999,
+        true,
+      );
+    });
+  }
+
+  QueryBuilder<OrderModel, OrderModel, QAfterFilterCondition>
+      clientQrCodesLengthLessThan(
+    int length, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'clientQrCodes',
+        0,
+        true,
+        length,
+        include,
+      );
+    });
+  }
+
+  QueryBuilder<OrderModel, OrderModel, QAfterFilterCondition>
+      clientQrCodesLengthGreaterThan(
+    int length, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'clientQrCodes',
+        length,
+        include,
+        999999,
+        true,
+      );
+    });
+  }
+
+  QueryBuilder<OrderModel, OrderModel, QAfterFilterCondition>
+      clientQrCodesLengthBetween(
+    int lower,
+    int upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'clientQrCodes',
+        lower,
+        includeLower,
+        upper,
+        includeUpper,
+      );
     });
   }
 
@@ -1945,6 +2052,230 @@ extension OrderModelQueryFilter
   }
 
   QueryBuilder<OrderModel, OrderModel, QAfterFilterCondition>
+      photosElementEqualTo(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'photos',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<OrderModel, OrderModel, QAfterFilterCondition>
+      photosElementGreaterThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'photos',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<OrderModel, OrderModel, QAfterFilterCondition>
+      photosElementLessThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'photos',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<OrderModel, OrderModel, QAfterFilterCondition>
+      photosElementBetween(
+    String lower,
+    String upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'photos',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<OrderModel, OrderModel, QAfterFilterCondition>
+      photosElementStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'photos',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<OrderModel, OrderModel, QAfterFilterCondition>
+      photosElementEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'photos',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<OrderModel, OrderModel, QAfterFilterCondition>
+      photosElementContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'photos',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<OrderModel, OrderModel, QAfterFilterCondition>
+      photosElementMatches(String pattern, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'photos',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<OrderModel, OrderModel, QAfterFilterCondition>
+      photosElementIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'photos',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<OrderModel, OrderModel, QAfterFilterCondition>
+      photosElementIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'photos',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<OrderModel, OrderModel, QAfterFilterCondition>
+      photosLengthEqualTo(int length) {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'photos',
+        length,
+        true,
+        length,
+        true,
+      );
+    });
+  }
+
+  QueryBuilder<OrderModel, OrderModel, QAfterFilterCondition> photosIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'photos',
+        0,
+        true,
+        0,
+        true,
+      );
+    });
+  }
+
+  QueryBuilder<OrderModel, OrderModel, QAfterFilterCondition>
+      photosIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'photos',
+        0,
+        false,
+        999999,
+        true,
+      );
+    });
+  }
+
+  QueryBuilder<OrderModel, OrderModel, QAfterFilterCondition>
+      photosLengthLessThan(
+    int length, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'photos',
+        0,
+        true,
+        length,
+        include,
+      );
+    });
+  }
+
+  QueryBuilder<OrderModel, OrderModel, QAfterFilterCondition>
+      photosLengthGreaterThan(
+    int length, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'photos',
+        length,
+        include,
+        999999,
+        true,
+      );
+    });
+  }
+
+  QueryBuilder<OrderModel, OrderModel, QAfterFilterCondition>
+      photosLengthBetween(
+    int lower,
+    int upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'photos',
+        lower,
+        includeLower,
+        upper,
+        includeUpper,
+      );
+    });
+  }
+
+  QueryBuilder<OrderModel, OrderModel, QAfterFilterCondition>
       pointsDeductionEqualTo(
     double value, {
     double epsilon = Query.epsilon,
@@ -2010,13 +2341,14 @@ extension OrderModelQueryFilter
     });
   }
 
-  QueryBuilder<OrderModel, OrderModel, QAfterFilterCondition> pvzQrCodeEqualTo(
+  QueryBuilder<OrderModel, OrderModel, QAfterFilterCondition>
+      pvzQrCodesElementEqualTo(
     String value, {
     bool caseSensitive = true,
   }) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.equalTo(
-        property: r'pvzQrCode',
+        property: r'pvzQrCodes',
         value: value,
         caseSensitive: caseSensitive,
       ));
@@ -2024,7 +2356,7 @@ extension OrderModelQueryFilter
   }
 
   QueryBuilder<OrderModel, OrderModel, QAfterFilterCondition>
-      pvzQrCodeGreaterThan(
+      pvzQrCodesElementGreaterThan(
     String value, {
     bool include = false,
     bool caseSensitive = true,
@@ -2032,14 +2364,15 @@ extension OrderModelQueryFilter
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.greaterThan(
         include: include,
-        property: r'pvzQrCode',
+        property: r'pvzQrCodes',
         value: value,
         caseSensitive: caseSensitive,
       ));
     });
   }
 
-  QueryBuilder<OrderModel, OrderModel, QAfterFilterCondition> pvzQrCodeLessThan(
+  QueryBuilder<OrderModel, OrderModel, QAfterFilterCondition>
+      pvzQrCodesElementLessThan(
     String value, {
     bool include = false,
     bool caseSensitive = true,
@@ -2047,14 +2380,15 @@ extension OrderModelQueryFilter
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.lessThan(
         include: include,
-        property: r'pvzQrCode',
+        property: r'pvzQrCodes',
         value: value,
         caseSensitive: caseSensitive,
       ));
     });
   }
 
-  QueryBuilder<OrderModel, OrderModel, QAfterFilterCondition> pvzQrCodeBetween(
+  QueryBuilder<OrderModel, OrderModel, QAfterFilterCondition>
+      pvzQrCodesElementBetween(
     String lower,
     String upper, {
     bool includeLower = true,
@@ -2063,7 +2397,7 @@ extension OrderModelQueryFilter
   }) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.between(
-        property: r'pvzQrCode',
+        property: r'pvzQrCodes',
         lower: lower,
         includeLower: includeLower,
         upper: upper,
@@ -2074,50 +2408,49 @@ extension OrderModelQueryFilter
   }
 
   QueryBuilder<OrderModel, OrderModel, QAfterFilterCondition>
-      pvzQrCodeStartsWith(
+      pvzQrCodesElementStartsWith(
     String value, {
     bool caseSensitive = true,
   }) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.startsWith(
-        property: r'pvzQrCode',
+        property: r'pvzQrCodes',
         value: value,
         caseSensitive: caseSensitive,
       ));
     });
   }
 
-  QueryBuilder<OrderModel, OrderModel, QAfterFilterCondition> pvzQrCodeEndsWith(
+  QueryBuilder<OrderModel, OrderModel, QAfterFilterCondition>
+      pvzQrCodesElementEndsWith(
     String value, {
     bool caseSensitive = true,
   }) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.endsWith(
-        property: r'pvzQrCode',
+        property: r'pvzQrCodes',
         value: value,
         caseSensitive: caseSensitive,
       ));
     });
   }
 
-  QueryBuilder<OrderModel, OrderModel, QAfterFilterCondition> pvzQrCodeContains(
-      String value,
-      {bool caseSensitive = true}) {
+  QueryBuilder<OrderModel, OrderModel, QAfterFilterCondition>
+      pvzQrCodesElementContains(String value, {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.contains(
-        property: r'pvzQrCode',
+        property: r'pvzQrCodes',
         value: value,
         caseSensitive: caseSensitive,
       ));
     });
   }
 
-  QueryBuilder<OrderModel, OrderModel, QAfterFilterCondition> pvzQrCodeMatches(
-      String pattern,
-      {bool caseSensitive = true}) {
+  QueryBuilder<OrderModel, OrderModel, QAfterFilterCondition>
+      pvzQrCodesElementMatches(String pattern, {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.matches(
-        property: r'pvzQrCode',
+        property: r'pvzQrCodes',
         wildcard: pattern,
         caseSensitive: caseSensitive,
       ));
@@ -2125,22 +2458,111 @@ extension OrderModelQueryFilter
   }
 
   QueryBuilder<OrderModel, OrderModel, QAfterFilterCondition>
-      pvzQrCodeIsEmpty() {
+      pvzQrCodesElementIsEmpty() {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.equalTo(
-        property: r'pvzQrCode',
+        property: r'pvzQrCodes',
         value: '',
       ));
     });
   }
 
   QueryBuilder<OrderModel, OrderModel, QAfterFilterCondition>
-      pvzQrCodeIsNotEmpty() {
+      pvzQrCodesElementIsNotEmpty() {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.greaterThan(
-        property: r'pvzQrCode',
+        property: r'pvzQrCodes',
         value: '',
       ));
+    });
+  }
+
+  QueryBuilder<OrderModel, OrderModel, QAfterFilterCondition>
+      pvzQrCodesLengthEqualTo(int length) {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'pvzQrCodes',
+        length,
+        true,
+        length,
+        true,
+      );
+    });
+  }
+
+  QueryBuilder<OrderModel, OrderModel, QAfterFilterCondition>
+      pvzQrCodesIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'pvzQrCodes',
+        0,
+        true,
+        0,
+        true,
+      );
+    });
+  }
+
+  QueryBuilder<OrderModel, OrderModel, QAfterFilterCondition>
+      pvzQrCodesIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'pvzQrCodes',
+        0,
+        false,
+        999999,
+        true,
+      );
+    });
+  }
+
+  QueryBuilder<OrderModel, OrderModel, QAfterFilterCondition>
+      pvzQrCodesLengthLessThan(
+    int length, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'pvzQrCodes',
+        0,
+        true,
+        length,
+        include,
+      );
+    });
+  }
+
+  QueryBuilder<OrderModel, OrderModel, QAfterFilterCondition>
+      pvzQrCodesLengthGreaterThan(
+    int length, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'pvzQrCodes',
+        length,
+        include,
+        999999,
+        true,
+      );
+    });
+  }
+
+  QueryBuilder<OrderModel, OrderModel, QAfterFilterCondition>
+      pvzQrCodesLengthBetween(
+    int lower,
+    int upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'pvzQrCodes',
+        lower,
+        includeLower,
+        upper,
+        includeUpper,
+      );
     });
   }
 
@@ -2476,140 +2898,6 @@ extension OrderModelQueryFilter
       ));
     });
   }
-
-  QueryBuilder<OrderModel, OrderModel, QAfterFilterCondition> urlPhotoEqualTo(
-    String value, {
-    bool caseSensitive = true,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.equalTo(
-        property: r'urlPhoto',
-        value: value,
-        caseSensitive: caseSensitive,
-      ));
-    });
-  }
-
-  QueryBuilder<OrderModel, OrderModel, QAfterFilterCondition>
-      urlPhotoGreaterThan(
-    String value, {
-    bool include = false,
-    bool caseSensitive = true,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.greaterThan(
-        include: include,
-        property: r'urlPhoto',
-        value: value,
-        caseSensitive: caseSensitive,
-      ));
-    });
-  }
-
-  QueryBuilder<OrderModel, OrderModel, QAfterFilterCondition> urlPhotoLessThan(
-    String value, {
-    bool include = false,
-    bool caseSensitive = true,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.lessThan(
-        include: include,
-        property: r'urlPhoto',
-        value: value,
-        caseSensitive: caseSensitive,
-      ));
-    });
-  }
-
-  QueryBuilder<OrderModel, OrderModel, QAfterFilterCondition> urlPhotoBetween(
-    String lower,
-    String upper, {
-    bool includeLower = true,
-    bool includeUpper = true,
-    bool caseSensitive = true,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.between(
-        property: r'urlPhoto',
-        lower: lower,
-        includeLower: includeLower,
-        upper: upper,
-        includeUpper: includeUpper,
-        caseSensitive: caseSensitive,
-      ));
-    });
-  }
-
-  QueryBuilder<OrderModel, OrderModel, QAfterFilterCondition>
-      urlPhotoStartsWith(
-    String value, {
-    bool caseSensitive = true,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.startsWith(
-        property: r'urlPhoto',
-        value: value,
-        caseSensitive: caseSensitive,
-      ));
-    });
-  }
-
-  QueryBuilder<OrderModel, OrderModel, QAfterFilterCondition> urlPhotoEndsWith(
-    String value, {
-    bool caseSensitive = true,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.endsWith(
-        property: r'urlPhoto',
-        value: value,
-        caseSensitive: caseSensitive,
-      ));
-    });
-  }
-
-  QueryBuilder<OrderModel, OrderModel, QAfterFilterCondition> urlPhotoContains(
-      String value,
-      {bool caseSensitive = true}) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.contains(
-        property: r'urlPhoto',
-        value: value,
-        caseSensitive: caseSensitive,
-      ));
-    });
-  }
-
-  QueryBuilder<OrderModel, OrderModel, QAfterFilterCondition> urlPhotoMatches(
-      String pattern,
-      {bool caseSensitive = true}) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.matches(
-        property: r'urlPhoto',
-        wildcard: pattern,
-        caseSensitive: caseSensitive,
-      ));
-    });
-  }
-
-  QueryBuilder<OrderModel, OrderModel, QAfterFilterCondition>
-      urlPhotoIsEmpty() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.equalTo(
-        property: r'urlPhoto',
-        value: '',
-      ));
-    });
-  }
-
-  QueryBuilder<OrderModel, OrderModel, QAfterFilterCondition>
-      urlPhotoIsNotEmpty() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.greaterThan(
-        property: r'urlPhoto',
-        value: '',
-      ));
-    });
-  }
 }
 
 extension OrderModelQueryObject
@@ -2653,18 +2941,6 @@ extension OrderModelQuerySortBy
   QueryBuilder<OrderModel, OrderModel, QAfterSortBy> sortByClientPaymentDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'clientPayment', Sort.desc);
-    });
-  }
-
-  QueryBuilder<OrderModel, OrderModel, QAfterSortBy> sortByClientQrCode() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'clientQrCode', Sort.asc);
-    });
-  }
-
-  QueryBuilder<OrderModel, OrderModel, QAfterSortBy> sortByClientQrCodeDesc() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'clientQrCode', Sort.desc);
     });
   }
 
@@ -2790,18 +3066,6 @@ extension OrderModelQuerySortBy
     });
   }
 
-  QueryBuilder<OrderModel, OrderModel, QAfterSortBy> sortByPvzQrCode() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'pvzQrCode', Sort.asc);
-    });
-  }
-
-  QueryBuilder<OrderModel, OrderModel, QAfterSortBy> sortByPvzQrCodeDesc() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'pvzQrCode', Sort.desc);
-    });
-  }
-
   QueryBuilder<OrderModel, OrderModel, QAfterSortBy> sortByResponsiblePerson() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'responsiblePerson', Sort.asc);
@@ -2836,18 +3100,6 @@ extension OrderModelQuerySortBy
   QueryBuilder<OrderModel, OrderModel, QAfterSortBy> sortByTotalAmountDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'totalAmount', Sort.desc);
-    });
-  }
-
-  QueryBuilder<OrderModel, OrderModel, QAfterSortBy> sortByUrlPhoto() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'urlPhoto', Sort.asc);
-    });
-  }
-
-  QueryBuilder<OrderModel, OrderModel, QAfterSortBy> sortByUrlPhotoDesc() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'urlPhoto', Sort.desc);
     });
   }
 }
@@ -2887,18 +3139,6 @@ extension OrderModelQuerySortThenBy
   QueryBuilder<OrderModel, OrderModel, QAfterSortBy> thenByClientPaymentDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'clientPayment', Sort.desc);
-    });
-  }
-
-  QueryBuilder<OrderModel, OrderModel, QAfterSortBy> thenByClientQrCode() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'clientQrCode', Sort.asc);
-    });
-  }
-
-  QueryBuilder<OrderModel, OrderModel, QAfterSortBy> thenByClientQrCodeDesc() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'clientQrCode', Sort.desc);
     });
   }
 
@@ -3036,18 +3276,6 @@ extension OrderModelQuerySortThenBy
     });
   }
 
-  QueryBuilder<OrderModel, OrderModel, QAfterSortBy> thenByPvzQrCode() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'pvzQrCode', Sort.asc);
-    });
-  }
-
-  QueryBuilder<OrderModel, OrderModel, QAfterSortBy> thenByPvzQrCodeDesc() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'pvzQrCode', Sort.desc);
-    });
-  }
-
   QueryBuilder<OrderModel, OrderModel, QAfterSortBy> thenByResponsiblePerson() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'responsiblePerson', Sort.asc);
@@ -3084,18 +3312,6 @@ extension OrderModelQuerySortThenBy
       return query.addSortBy(r'totalAmount', Sort.desc);
     });
   }
-
-  QueryBuilder<OrderModel, OrderModel, QAfterSortBy> thenByUrlPhoto() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'urlPhoto', Sort.asc);
-    });
-  }
-
-  QueryBuilder<OrderModel, OrderModel, QAfterSortBy> thenByUrlPhotoDesc() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'urlPhoto', Sort.desc);
-    });
-  }
 }
 
 extension OrderModelQueryWhereDistinct
@@ -3120,10 +3336,9 @@ extension OrderModelQueryWhereDistinct
     });
   }
 
-  QueryBuilder<OrderModel, OrderModel, QDistinct> distinctByClientQrCode(
-      {bool caseSensitive = true}) {
+  QueryBuilder<OrderModel, OrderModel, QDistinct> distinctByClientQrCodes() {
     return QueryBuilder.apply(this, (query) {
-      return query.addDistinctBy(r'clientQrCode', caseSensitive: caseSensitive);
+      return query.addDistinctBy(r'clientQrCodes');
     });
   }
 
@@ -3187,16 +3402,21 @@ extension OrderModelQueryWhereDistinct
     });
   }
 
+  QueryBuilder<OrderModel, OrderModel, QDistinct> distinctByPhotos() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'photos');
+    });
+  }
+
   QueryBuilder<OrderModel, OrderModel, QDistinct> distinctByPointsDeduction() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'pointsDeduction');
     });
   }
 
-  QueryBuilder<OrderModel, OrderModel, QDistinct> distinctByPvzQrCode(
-      {bool caseSensitive = true}) {
+  QueryBuilder<OrderModel, OrderModel, QDistinct> distinctByPvzQrCodes() {
     return QueryBuilder.apply(this, (query) {
-      return query.addDistinctBy(r'pvzQrCode', caseSensitive: caseSensitive);
+      return query.addDistinctBy(r'pvzQrCodes');
     });
   }
 
@@ -3218,13 +3438,6 @@ extension OrderModelQueryWhereDistinct
   QueryBuilder<OrderModel, OrderModel, QDistinct> distinctByTotalAmount() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'totalAmount');
-    });
-  }
-
-  QueryBuilder<OrderModel, OrderModel, QDistinct> distinctByUrlPhoto(
-      {bool caseSensitive = true}) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addDistinctBy(r'urlPhoto', caseSensitive: caseSensitive);
     });
   }
 }
@@ -3255,9 +3468,10 @@ extension OrderModelQueryProperty
     });
   }
 
-  QueryBuilder<OrderModel, String, QQueryOperations> clientQrCodeProperty() {
+  QueryBuilder<OrderModel, List<String>, QQueryOperations>
+      clientQrCodesProperty() {
     return QueryBuilder.apply(this, (query) {
-      return query.addPropertyName(r'clientQrCode');
+      return query.addPropertyName(r'clientQrCodes');
     });
   }
 
@@ -3315,15 +3529,22 @@ extension OrderModelQueryProperty
     });
   }
 
+  QueryBuilder<OrderModel, List<String>, QQueryOperations> photosProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'photos');
+    });
+  }
+
   QueryBuilder<OrderModel, double, QQueryOperations> pointsDeductionProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'pointsDeduction');
     });
   }
 
-  QueryBuilder<OrderModel, String, QQueryOperations> pvzQrCodeProperty() {
+  QueryBuilder<OrderModel, List<String>, QQueryOperations>
+      pvzQrCodesProperty() {
     return QueryBuilder.apply(this, (query) {
-      return query.addPropertyName(r'pvzQrCode');
+      return query.addPropertyName(r'pvzQrCodes');
     });
   }
 
@@ -3343,12 +3564,6 @@ extension OrderModelQueryProperty
   QueryBuilder<OrderModel, double, QQueryOperations> totalAmountProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'totalAmount');
-    });
-  }
-
-  QueryBuilder<OrderModel, String, QQueryOperations> urlPhotoProperty() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addPropertyName(r'urlPhoto');
     });
   }
 }

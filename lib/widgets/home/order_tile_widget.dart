@@ -114,9 +114,9 @@ class _OrderTileWidgetState extends State<OrderTileWidget> {
   Widget build(BuildContext context) {
     final isDone = order.status == 'Готово';
     final isDelayed = order.status == 'Отложено';
-    final hasPhoto = order.urlPhoto.isNotEmpty;
-    final hasClientQr = order.clientQrCode.isNotEmpty;
-    final hasPvzQr = order.pvzQrCode.isNotEmpty;
+    final hasPhoto = order.photos.isNotEmpty;
+    final hasClientQr = order.clientQrCodes.isNotEmpty;
+    final hasPvzQr = order.pvzQrCodes.isNotEmpty;
 
     // Генерируем короткий ID для визуала (APP - ###)
     final shortId = order.id.length > 8 ? order.id.substring(0, 8).toUpperCase() : order.id.toUpperCase();

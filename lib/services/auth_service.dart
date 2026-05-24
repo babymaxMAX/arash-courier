@@ -1,5 +1,6 @@
 // Клиент Supabase: Auth, запросы к таблицам и т.д.
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter/foundation.dart';
 
 // Класс-обёртка над Supabase Auth и таблицей profiles (роль пользователя).
 class AuthService {
@@ -34,19 +35,16 @@ class AuthService {
     }
 
     try {
-      // SELECT role FROM profiles WHERE id = user.id; ожидаем ровно одну строку.
       final response = await supabase
-          .from('profiles') // Имя таблицы в Postgres.
-          .select('role') // Только колонка role.
-          .eq('id', user.id) // Фильтр по UUID пользователя из Auth.
-          .single(); // Ошибка, если 0 или больше 1 строки.
-
-      // Приводим значение из JSON к String (например 'courier' или 'admin').
+          .from('profiles')
+          .select('role')
+          .eq('id', user.id)
+          .maybeSingle(); // Используем maybeSingle() вместо single()
+          
+      if (response == null) return 'courier';
       return response['role'] as String;
     } catch (e) {
-      // Логируем в консоль для отладки.
-      print('Error getting user role: $e');
-      // Не ломаем UI — отдаём безопасное значение по умолчанию.
+      debugPrint('Error getting user role: $e');
       return 'courier';
     }
   }

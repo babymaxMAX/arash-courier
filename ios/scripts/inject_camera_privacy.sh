@@ -1,5 +1,5 @@
 #!/bin/sh
-# Гарантирует NSCameraUsageDescription в финальном Info.plist (иначе iOS сразу закрывает камеру).
+# Гарантирует privacy-ключи в финальном Info.plist (иначе iOS сразу закрывает камеру).
 set -e
 
 PLIST="${TARGET_BUILD_DIR}/${WRAPPER_NAME}/Info.plist"
@@ -22,8 +22,8 @@ set_privacy_key() {
   fi
 }
 
-set_privacy_key "NSCameraUsageDescription" "Приложению требуется доступ к камере для сканирования штрих-кодов и фотографирования посылок."
-set_privacy_key "NSPhotoLibraryUsageDescription" "Приложению требуется доступ к галерее для выбора фотографий посылок."
-set_privacy_key "NSPhotoLibraryAddUsageDescription" "Приложению требуется доступ для сохранения фотографий посылок."
+set_privacy_key "NSCameraUsageDescription" "Приложению нужен доступ к камере для сканирования QR-кодов и создания фотоотчетов."
+set_privacy_key "NSPhotoLibraryUsageDescription" "Приложению нужен доступ к галерее для загрузки фотографий заказов."
+set_privacy_key "NSMicrophoneUsageDescription" "Приложению нужен доступ к микрофону для записи видеоотчетов."
 
 echo "Privacy keys injected into ${PLIST}"

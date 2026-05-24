@@ -47,14 +47,6 @@
 			</array>
 		</dict>
 	</dict>
-	<key>UIApplicationSupportsIndirectInputEvents</key>
-	<true/>
-	<key>NSCameraUsageDescription</key>
-	<string>Приложению требуется доступ к камере для сканирования штрих-кодов и фотографирования посылок.</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Приложению требуется доступ к галерее для выбора фотографий посылок.</string>
-	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>Приложению требуется доступ для сохранения фотографий посылок.</string>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>
@@ -72,5 +64,13 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>Приложению нужен доступ к камере для сканирования QR-кодов и создания фотоотчетов.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Приложению нужен доступ к галерее для загрузки фотографий заказов.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Приложению нужен доступ к микрофону для записи видеоотчетов.</string>
+	<key>UIApplicationSupportsIndirectInputEvents</key>
+	<true/>
 </dict>
 </plist>

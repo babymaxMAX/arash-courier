@@ -2,7 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:isar/isar.dart';
+import 'package:isar_community/isar.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:arash_curier/models/order_model.dart';
@@ -312,6 +313,10 @@ class DatabaseService {
 
         final updatedPhotos = List<String>.from(currentPhotos)..add(publicUrl);
 
+        await _sync.applyLocalOrderPatch(id, (o) {
+          if (!o.photos.contains(publicUrl)) o.photos.add(publicUrl);
+        });
+
         await supabase.from('orders').update({
           'url_photo': OrderModel.encodeList(updatedPhotos),
         }).eq('id', id);
@@ -319,7 +324,21 @@ class DatabaseService {
         rethrow;
       }
     } else {
-      throw Exception('Добавление фото пока доступно только онлайн');
+      final dir = await getApplicationDocumentsDirectory();
+      final localImage = await imageFile.copy(
+        '${dir.path}/offline_${DateTime.now().millisecondsSinceEpoch}.jpg',
+      );
+      await _sync.applyLocalOrderPatch(id, (o) {
+        if (!o.photos.contains(localImage.path)) o.photos.add(localImage.path);
+      });
+      await _sync.addTask(
+        SyncActionType.addPhotoOffline,
+        id,
+        localImage.path,
+      );
+      throw Exception(
+        'ОФФЛАЙН: Фото сохранено. Оно будет отправлено при появлении сети.',
+      );
     }
   }
 
@@ -350,18 +369,30 @@ class DatabaseService {
     List<String> currentQrs,
     bool isClientQr,
   ) async {
-    final updatedQrs = List<String>.from(currentQrs)..add(code);
-    final column = isClientQr ? 'client_qr_code' : 'pvz_qr_code';
-
     if (await _isOnline()) {
+      final updatedQrs = List<String>.from(currentQrs)..add(code);
+      final column = isClientQr ? 'client_qr_code' : 'pvz_qr_code';
+
+      await _sync.applyLocalOrderPatch(id, (o) {
+        final list = isClientQr ? o.clientQrCodes : o.pvzQrCodes;
+        if (!list.contains(code)) list.add(code);
+      });
+
       await supabase.from('orders').update({
         column: OrderModel.encodeList(updatedQrs),
       }).eq('id', id);
     } else {
+      await _sync.applyLocalOrderPatch(id, (o) {
+        final list = isClientQr ? o.clientQrCodes : o.pvzQrCodes;
+        if (!list.contains(code)) list.add(code);
+      });
       await _sync.addTask(
-        isClientQr ? SyncActionType.updateClientQr : SyncActionType.updatePvzQr,
+        isClientQr ? SyncActionType.addClientQr : SyncActionType.addPvzQr,
         id,
-        OrderModel.encodeList(updatedQrs),
+        code,
+      );
+      throw Exception(
+        'ОФФЛАЙН: Штрих-код сохранен. Он будет отправлен при появлении сети.',
       );
     }
   }
@@ -379,6 +410,7 @@ class DatabaseService {
     }).eq('id', id);
   }
 
+  // Метод для сохранения отредактированного заказа
   Future<void> updateOrder(OrderModel order) async {
     await isar.writeTxn(() async {
       await isar.orderModels.put(order);

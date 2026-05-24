@@ -1,4 +1,4 @@
-import 'package:isar/isar.dart';
+import 'package:isar_community/isar.dart';
 
 part 'sync_task.g.dart';
 
@@ -14,6 +14,9 @@ abstract class SyncActionType {
   static const delayOrder = 'delay_order';
   static const updatePvzQr = 'update_pvz_qr';
   static const updateClientQr = 'update_client_qr';
+  static const addPvzQr = 'add_pvz_qr';
+  static const addClientQr = 'add_client_qr';
+  static const addPhotoOffline = 'add_photo_offline';
   static const clearPhoto = 'clear_photo';
   static const clearQr = 'clear_qr';
 }

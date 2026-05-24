@@ -138,7 +138,7 @@ const OrderModelSchema = CollectionSchema(
   getId: _orderModelGetId,
   getLinks: _orderModelGetLinks,
   attach: _orderModelAttach,
-  version: '3.1.0+1',
+  version: '3.3.2',
 );
 
 int _orderModelEstimateSize(

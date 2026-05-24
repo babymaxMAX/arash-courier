@@ -7,6 +7,7 @@ import 'package:arash_curier/services/database_service.dart';
 import 'package:arash_curier/screens/qr_scanner_screen.dart';
 import 'package:arash_curier/screens/add_order_screen.dart';
 import 'package:arash_curier/dialogs/order_bottom_sheet.dart';
+import 'package:arash_curier/services/isar_service.dart';
 import 'package:arash_curier/utils/app_snackbar.dart';
 
 class OrderTileWidget extends StatefulWidget {
@@ -91,11 +92,13 @@ class _OrderTileWidgetState extends State<OrderTileWidget> {
         builder: (context) => AddOrderScreen(orderToEdit: order),
       ),
     );
-    if (result == null) return;
-    await _run(
-      () => DatabaseService().updateOrder(result),
-      success: 'Заказ обновлён',
-    );
+
+    if (result != null) {
+      await _run(
+        () => DatabaseService(isar).updateOrder(result),
+        success: 'Заказ успешно обновлен!',
+      );
+    }
   }
 
   @override

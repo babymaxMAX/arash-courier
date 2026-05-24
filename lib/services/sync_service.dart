@@ -4,7 +4,7 @@ import 'dart:io';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
-import 'package:isar/isar.dart';
+import 'package:isar_community/isar.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:arash_curier/models/order_model.dart';
@@ -141,17 +141,35 @@ class SyncService {
         break;
 
       case SyncActionType.updatePvzQr:
-        await supabase
-            .from('orders')
-            .update({'pvz_qr_code': data['qrCode']})
-            .eq('id', task.orderId);
+        await supabase.from('orders').update({
+          'pvz_qr_code': data['qrCode'] ?? task.payload,
+        }).eq('id', task.orderId);
         break;
 
       case SyncActionType.updateClientQr:
-        await supabase
-            .from('orders')
-            .update({'client_qr_code': data['qrCode']})
-            .eq('id', task.orderId);
+        await supabase.from('orders').update({
+          'client_qr_code': data['qrCode'] ?? task.payload,
+        }).eq('id', task.orderId);
+        break;
+
+      case SyncActionType.addPvzQr:
+        await _appendQrToOrder(
+          task.orderId,
+          'pvz_qr_code',
+          task.payload,
+        );
+        break;
+
+      case SyncActionType.addClientQr:
+        await _appendQrToOrder(
+          task.orderId,
+          'client_qr_code',
+          task.payload,
+        );
+        break;
+
+      case SyncActionType.addPhotoOffline:
+        await _uploadOfflinePhoto(task.orderId, task.payload);
         break;
 
       case SyncActionType.clearPhoto:
@@ -173,37 +191,65 @@ class SyncService {
         break;
 
       case SyncActionType.updateOrder:
+        final orderData = data['order'] ?? data;
         await supabase
             .from('orders')
-            .update(data['order'])
+            .update(Map<String, dynamic>.from(orderData as Map))
             .eq('id', task.orderId);
         break;
 
       case SyncActionType.addPhoto:
-        final localPath = data['localPath'] as String;
-        final file = File(localPath);
-        if (!await file.exists()) {
-          throw Exception('Photo file not found: $localPath');
-        }
-        final fileName = 'order_${task.orderId}.jpg';
-        await supabase.storage.from('packages').upload(
-              fileName,
-              file,
-              fileOptions: const FileOptions(upsert: true),
-            );
-        final baseUrl =
-            supabase.storage.from('packages').getPublicUrl(fileName);
-        final publicUrl =
-            '$baseUrl?t=${DateTime.now().millisecondsSinceEpoch}';
-        await supabase
-            .from('orders')
-            .update({'url_photo': publicUrl})
-            .eq('id', task.orderId);
+        final localPath = data['localPath'] as String? ?? task.payload;
+        await _uploadOfflinePhoto(task.orderId, localPath);
         break;
 
       default:
         throw Exception('Unknown sync action: ${task.actionType}');
     }
+  }
+
+  Future<void> _appendQrToOrder(
+    String orderId,
+    String column,
+    String code,
+  ) async {
+    final response = await supabase
+        .from('orders')
+        .select(column)
+        .eq('id', orderId)
+        .maybeSingle();
+    final current = OrderModel.parseList(response?[column]);
+    if (!current.contains(code)) current.add(code);
+    await supabase.from('orders').update({
+      column: OrderModel.encodeList(current),
+    }).eq('id', orderId);
+  }
+
+  Future<void> _uploadOfflinePhoto(String orderId, String localPath) async {
+    final file = File(localPath);
+    if (!await file.exists()) return;
+
+    final uniqueSuffix = DateTime.now().millisecondsSinceEpoch;
+    final fileName = 'order_${orderId}_$uniqueSuffix.jpg';
+
+    await supabase.storage.from('packages').upload(fileName, file);
+    final publicUrl = supabase.storage.from('packages').getPublicUrl(fileName);
+
+    final response = await supabase
+        .from('orders')
+        .select('url_photo')
+        .eq('id', orderId)
+        .maybeSingle();
+    final currentPhotos = OrderModel.parseList(response?['url_photo']);
+    if (!currentPhotos.contains(publicUrl)) currentPhotos.add(publicUrl);
+
+    await supabase.from('orders').update({
+      'url_photo': OrderModel.encodeList(currentPhotos),
+    }).eq('id', orderId);
+
+    try {
+      await file.delete();
+    } catch (_) {}
   }
 
   /// Кэш заказов в Isar после успешной загрузки с сервера.

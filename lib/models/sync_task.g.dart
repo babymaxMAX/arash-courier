@@ -63,7 +63,7 @@ const SyncTaskSchema = CollectionSchema(
   getId: _syncTaskGetId,
   getLinks: _syncTaskGetLinks,
   attach: _syncTaskAttach,
-  version: '3.1.0+1',
+  version: '3.3.2',
 );
 
 int _syncTaskEstimateSize(

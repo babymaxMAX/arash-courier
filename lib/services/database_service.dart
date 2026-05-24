@@ -379,6 +379,26 @@ class DatabaseService {
     }).eq('id', id);
   }
 
+  Future<void> updateOrder(OrderModel order) async {
+    await isar.writeTxn(() async {
+      await isar.orderModels.put(order);
+    });
+
+    final payload = jsonEncode({'order': order.toJson()});
+
+    if (await _isOnline()) {
+      try {
+        await supabase.from('orders').update(order.toJson()).eq('id', order.id);
+        return;
+      } catch (e) {
+        await _sync.addTask(SyncActionType.updateOrder, order.id, payload);
+        rethrow;
+      }
+    }
+
+    await _sync.addTask(SyncActionType.updateOrder, order.id, payload);
+  }
+
   Future<void> createOrder(OrderModel order) async {
     await isar.writeTxn(() async {
       await isar.orderModels.put(order);

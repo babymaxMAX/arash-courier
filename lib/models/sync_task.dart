@@ -6,6 +6,7 @@ part 'sync_task.g.dart';
 abstract class SyncActionType {
   static const updateStatus = 'update_status';
   static const createOrder = 'create_order';
+  static const updateOrder = 'update_order';
   static const addPhoto = 'add_photo';
   static const updateComment = 'update_comment';
   static const addComment = 'add_comment';

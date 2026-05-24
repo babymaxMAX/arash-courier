@@ -172,6 +172,13 @@ class SyncService {
         await supabase.from('orders').insert(data['order']);
         break;
 
+      case SyncActionType.updateOrder:
+        await supabase
+            .from('orders')
+            .update(data['order'])
+            .eq('id', task.orderId);
+        break;
+
       case SyncActionType.addPhoto:
         final localPath = data['localPath'] as String;
         final file = File(localPath);

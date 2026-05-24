@@ -87,9 +87,15 @@ class _OrderTileWidgetState extends State<OrderTileWidget> {
   void _editOrder() async {
     final result = await Navigator.push<OrderModel>(
       context,
-      MaterialPageRoute(builder: (context) => AddOrderScreen(order: order)),
+      MaterialPageRoute(
+        builder: (context) => AddOrderScreen(orderToEdit: order),
+      ),
     );
-    if (result != null) widget.onRefresh();
+    if (result == null) return;
+    await _run(
+      () => DatabaseService().updateOrder(result),
+      success: 'Заказ обновлён',
+    );
   }
 
   @override

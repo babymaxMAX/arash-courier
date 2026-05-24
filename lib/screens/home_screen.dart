@@ -290,12 +290,20 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-      floatingActionButton: _currentIndex == 0
+      // Показываем кнопку создания заказа ТОЛЬКО если роль manager или admin
+      floatingActionButton: (_currentIndex == 0 &&
+              (_userRole == 'manager' || _userRole == 'admin'))
           ? FloatingActionButton.extended(
               onPressed: _openAddOrder,
               backgroundColor: Colors.amber[700],
               icon: const Icon(Icons.add_rounded, color: Colors.black87),
-              label: const Text('Заказ', style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold)),
+              label: const Text(
+                'Заказ',
+                style: TextStyle(
+                  color: Colors.black87,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
             )
           : null,
     );

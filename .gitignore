@@ -47,3 +47,5 @@ app.*.map.json
 # Игнорировать старую Android папку
 android_old/build/
 android_old/.gradle/
+
+.env

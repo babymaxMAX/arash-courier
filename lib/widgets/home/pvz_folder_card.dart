@@ -24,7 +24,8 @@ class PvzFolderCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final parts = folderKey.split(' - ');
     final company = parts.isNotEmpty ? parts[0] : 'Неизвестно';
-    final address = parts.length > 1 ? parts[1] : '';
+    // Фиксим случай когда в ключе нет адреса
+    final address = parts.length > 1 ? parts.sublist(1).join(' - ') : '';
 
     final doneCount = orders
         .where((o) => o.status == 'Готово' || o.status == 'SHIPPING')

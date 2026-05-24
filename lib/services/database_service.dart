@@ -30,20 +30,33 @@ class DatabaseService {
   Future<Map<String, List<OrderModel>>> fetchAndSortOrders(String role) async {
     if (await _isOnline()) {
       try {
-        var query = supabase.from('orders').select();
+        final List<dynamic> allRows = [];
+        int offset = 0;
+        const int limit = 1000;
 
-        if (role == 'courier') {
-          query = query.not(
-            'status',
-            'in',
-            '("Выдано", "Отменено", "Возврат", "ISSUED", "CANCELLED", "CANCELED", "RETURN", "RETURNED")',
-          );
+        while (true) {
+          var query = supabase.from('orders').select();
+
+          if (role == 'courier') {
+            query = query.not(
+              'status',
+              'in',
+              '("Выдано", "Отменено", "Возврат", "ISSUED", "CANCELLED", "CANCELED", "RETURN", "RETURNED")',
+            );
+          }
+
+          final response = await query.range(offset, offset + limit - 1);
+          allRows.addAll(response);
+
+          if (response.length < limit) {
+            break;
+          }
+          offset += limit;
         }
 
-        final rawResponse = await query.limit(99999);
         final sortedOrders = <String, List<OrderModel>>{};
 
-        for (final row in rawResponse) {
+        for (final row in allRows) {
           final orderModel = OrderModel.fromJson(row);
           final folderKey =
               '${orderModel.companyName} - ${orderModel.companyAddress}';

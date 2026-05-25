@@ -110,10 +110,13 @@ class SyncService {
     switch (task.actionType) {
       case SyncActionType.updateStatus:
         final status = data['status']?.toString() ?? task.payload;
-        await supabase
-            .from('orders')
-            .update({'status': status})
-            .eq('id', task.orderId);
+        final update = <String, dynamic>{'status': status};
+        final dateUpdated = data['date_updated']?.toString();
+        if (dateUpdated != null && dateUpdated.isNotEmpty) {
+          update['date_updated'] = dateUpdated;
+          update['updated_at'] = dateUpdated;
+        }
+        await supabase.from('orders').update(update).eq('id', task.orderId);
         break;
 
       case SyncActionType.updateComment:
@@ -134,10 +137,16 @@ class SyncService {
         break;
 
       case SyncActionType.delayOrder:
-        await supabase.from('orders').update({
+        final update = <String, dynamic>{
           'status': 'delayed',
           'cancel_reason': data['reason'],
-        }).eq('id', task.orderId);
+        };
+        final dateUpdated = data['date_updated']?.toString();
+        if (dateUpdated != null && dateUpdated.isNotEmpty) {
+          update['date_updated'] = dateUpdated;
+          update['updated_at'] = dateUpdated;
+        }
+        await supabase.from('orders').update(update).eq('id', task.orderId);
         break;
 
       case SyncActionType.updatePvzQr:

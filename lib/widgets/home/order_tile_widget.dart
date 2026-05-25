@@ -285,6 +285,11 @@ class _OrderTileWidgetState extends State<OrderTileWidget> {
     );
   }
 
+  String _formatTime(DateTime date) {
+    final local = date.toLocal();
+    return '${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}';
+  }
+
   void _editOrder() async {
     final result = await Navigator.push<OrderModel>(
       context,
@@ -304,7 +309,7 @@ class _OrderTileWidgetState extends State<OrderTileWidget> {
 
   @override
   Widget build(BuildContext context) {
-    final isDone = order.status == 'Готово' || order.status == 'SHIPPING';
+    final isDone = order.status == 'Готово';
     final isDelayed = order.status == 'Отложено';
     final shortId = order.id.length > 8
         ? order.id.substring(0, 8).toUpperCase()
@@ -347,18 +352,38 @@ class _OrderTileWidgetState extends State<OrderTileWidget> {
                 children: [
                 Row(
                   children: [
-                    Icon(Icons.inventory_2_outlined,
-                        size: 16, color: Colors.grey.shade600),
+                    Icon(Icons.smart_toy_outlined,
+                        size: 16, color: Colors.grey.shade500),
                     const SizedBox(width: 6),
                     Text(
-                      'ID: $shortId',
+                      'APP - $shortId',
                       style: TextStyle(
                         fontSize: 12,
                         color: Colors.grey.shade600,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
+                    if (isDone) ...[
+                      const SizedBox(width: 8),
+                      Icon(Icons.access_time,
+                          size: 14, color: Colors.green.shade600),
+                      const SizedBox(width: 4),
+                      Text(
+                        _formatTime(order.dateUpdated),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.green.shade700,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
                     const Spacer(),
+                    if (isDelayed)
+                      const Padding(
+                        padding: EdgeInsets.only(right: 8),
+                        child: Icon(Icons.notifications_active,
+                            color: Colors.red, size: 20),
+                      ),
                     if (isManager)
                       IconButton(
                         icon: const Icon(Icons.edit_note, color: Colors.blue),
@@ -382,7 +407,7 @@ class _OrderTileWidgetState extends State<OrderTileWidget> {
                           : () => _run(
                                 () => DatabaseService().updateOrderStatus(
                                   order.id,
-                                  isDone ? 'NEW' : 'READY',
+                                  isDone ? 'Новый' : 'Готово',
                                 ),
                                 success: isDone
                                     ? 'Статус сброшен'
@@ -466,6 +491,27 @@ class _OrderTileWidgetState extends State<OrderTileWidget> {
                       ),
                   ],
                 ),
+                if (order.comment != null &&
+                    order.comment!.trim().isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.amber.shade200),
+                    ),
+                    child: Text(
+                      order.comment!,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.amber.shade900,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ),
+                ],
                 if (order.photos.isNotEmpty ||
                     order.clientQrCodes.isNotEmpty ||
                     order.pvzQrCodes.isNotEmpty) ...[

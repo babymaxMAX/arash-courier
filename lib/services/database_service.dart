@@ -83,13 +83,51 @@ class DatabaseService {
     return cached;
   }
 
+  /// Статус для Supabase (англ. коды в БД).
+  static String _statusForDb(String status) {
+    switch (status) {
+      case 'Готово':
+        return 'READY';
+      case 'Новый':
+        return 'NEW';
+      case 'Отложено':
+        return 'delayed';
+      case 'Ожидает':
+        return 'WAITING';
+      case 'Выдано':
+        return 'ISSUED';
+      case 'Отменено':
+        return 'CANCELLED';
+      case 'Возврат':
+        return 'RETURN';
+      default:
+        return status;
+    }
+  }
+
   Future<void> updateOrderStatus(String id, String status) async {
-    await _sync.applyLocalOrderPatch(id, (o) => o.status = status);
-    final payload = jsonEncode({'status': status});
+    final now = DateTime.now().toUtc();
+    final dbStatus = _statusForDb(status);
+
+    await _sync.applyLocalOrderPatch(id, (o) {
+      o.status = status;
+      if (status == 'Готово') {
+        o.dateUpdated = now;
+      }
+    });
+
+    final payload = jsonEncode({
+      'status': dbStatus,
+      'date_updated': now.toIso8601String(),
+    });
 
     if (await _isOnline()) {
       try {
-        await supabase.from('orders').update({'status': status}).eq('id', id);
+        await supabase.from('orders').update({
+          'status': dbStatus,
+          'date_updated': now.toIso8601String(),
+          'updated_at': now.toIso8601String(),
+        }).eq('id', id);
         return;
       } catch (e) {
         await _sync.addTask(SyncActionType.updateStatus, id, payload);
@@ -174,17 +212,26 @@ class DatabaseService {
   }
 
   Future<void> delayOrder(String id, String reason) async {
+    final now = DateTime.now().toUtc();
+
     await _sync.applyLocalOrderPatch(id, (o) {
       o.status = 'Отложено';
       o.cancelReason = reason;
+      o.dateUpdated = now;
     });
-    final payload = jsonEncode({'reason': reason});
+
+    final payload = jsonEncode({
+      'reason': reason,
+      'date_updated': now.toIso8601String(),
+    });
 
     if (await _isOnline()) {
       try {
         await supabase.from('orders').update({
           'status': 'delayed',
           'cancel_reason': reason,
+          'date_updated': now.toIso8601String(),
+          'updated_at': now.toIso8601String(),
         }).eq('id', id);
         return;
       } catch (e) {

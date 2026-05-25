@@ -157,12 +157,13 @@ class OrderModel {
     return OrderModel.create(
       id: json['id']?.toString() ?? 'ОШИБКА_ID',
       dateCreated: json['date_created'] != null
-          ? DateTime.parse(json['date_created'].toString())
+          ? (DateTime.tryParse(json['date_created'].toString()) ?? DateTime.now())
           : DateTime.now(),
       dateUpdated: json['updated_at'] != null
-          ? DateTime.parse(json['updated_at'].toString())
+          ? (DateTime.tryParse(json['updated_at'].toString()) ?? DateTime.now())
           : (json['date_updated'] != null
-              ? DateTime.parse(json['date_updated'].toString())
+              ? (DateTime.tryParse(json['date_updated'].toString()) ??
+                  DateTime.now())
               : DateTime.now()),
       companyName: json['company_name'] ?? 'Неизвестная компания',
       companyAddress: json['company_address'] ?? 'Адрес не указан',

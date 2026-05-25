@@ -10,6 +10,7 @@ import 'package:arash_curier/models/order_model.dart';
 import 'package:arash_curier/models/sync_task.dart';
 import 'package:arash_curier/services/isar_service.dart' as isar_svc;
 import 'package:arash_curier/services/sync_service.dart';
+import 'package:arash_curier/utils/order_status.dart';
 
 /// Умный посредник: онлайн — Supabase, офлайн — очередь SyncService + локальный Isar.
 class DatabaseService {
@@ -83,35 +84,14 @@ class DatabaseService {
     return cached;
   }
 
-  /// Статус для Supabase (англ. коды в БД).
-  static String _statusForDb(String status) {
-    switch (status) {
-      case 'Готово':
-        return 'READY';
-      case 'Новый':
-        return 'NEW';
-      case 'Отложено':
-        return 'delayed';
-      case 'Ожидает':
-        return 'WAITING';
-      case 'Выдано':
-        return 'ISSUED';
-      case 'Отменено':
-        return 'CANCELLED';
-      case 'Возврат':
-        return 'RETURN';
-      default:
-        return status;
-    }
-  }
-
   Future<void> updateOrderStatus(String id, String status) async {
     final now = DateTime.now().toUtc();
-    final dbStatus = _statusForDb(status);
+    final dbStatus = OrderStatus.forDatabase(status);
+    final uiStatus = OrderModel.translateStatus(dbStatus);
 
     await _sync.applyLocalOrderPatch(id, (o) {
-      o.status = status;
-      if (status == 'Готово') {
+      o.status = uiStatus;
+      if (OrderStatus.isDone(dbStatus)) {
         o.dateUpdated = now;
       }
     });
@@ -139,12 +119,25 @@ class DatabaseService {
   }
 
   Future<void> updateOrderComment(String id, String text) async {
-    await _sync.applyLocalOrderPatch(id, (o) => o.comment = text);
-    final payload = jsonEncode({'comment': text});
+    final now = DateTime.now().toUtc();
+
+    await _sync.applyLocalOrderPatch(id, (o) {
+      o.comment = text;
+      o.dateUpdated = now;
+    });
+
+    final payload = jsonEncode({
+      'comment': text,
+      'date_updated': now.toIso8601String(),
+    });
 
     if (await _isOnline()) {
       try {
-        await supabase.from('orders').update({'comment': text}).eq('id', id);
+        await supabase.from('orders').update({
+          'comment': text,
+          'date_updated': now.toIso8601String(),
+          'updated_at': now.toIso8601String(),
+        }).eq('id', id);
         return;
       } catch (e) {
         await _sync.addTask(SyncActionType.updateComment, id, payload);

@@ -122,10 +122,13 @@ class SyncService {
       case SyncActionType.updateComment:
       case SyncActionType.addComment:
         final comment = data['comment']?.toString() ?? task.payload;
-        await supabase
-            .from('orders')
-            .update({'comment': comment})
-            .eq('id', task.orderId);
+        final update = <String, dynamic>{'comment': comment};
+        final dateUpdated = data['date_updated']?.toString();
+        if (dateUpdated != null && dateUpdated.isNotEmpty) {
+          update['date_updated'] = dateUpdated;
+          update['updated_at'] = dateUpdated;
+        }
+        await supabase.from('orders').update(update).eq('id', task.orderId);
         break;
 
       case SyncActionType.updatePayment:

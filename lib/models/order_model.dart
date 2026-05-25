@@ -183,6 +183,10 @@ class OrderModel {
     );
   }
 
+  /// Публичный доступ к переводу статуса из БД для UI.
+  static String translateStatus(String englishStatus) =>
+      _translateStatus(englishStatus);
+
   static String _translateStatus(String englishStatus) {
     switch (englishStatus.toUpperCase()) {
       case 'READY':
@@ -192,7 +196,7 @@ class OrderModel {
       case 'ISSUED':
         return 'Выдано';
       case 'SHIPPING':
-        return 'В пути';
+        return 'Готово';
       case 'CANCELLED':
       case 'CANCELED':
         return 'Отменено';

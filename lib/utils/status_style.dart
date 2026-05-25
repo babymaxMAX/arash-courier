@@ -14,7 +14,16 @@ class StatusStyle {
 
 StatusStyle statusStyleFor(String status) {
   switch (status) {
+    case 'SHIPPING':
+    case 'READY':
     case 'Готово':
+      return StatusStyle(
+        background: const Color(0xFFE8F5E9),
+        foreground: const Color(0xFF2E7D32),
+        icon: Icons.check_circle_rounded,
+      );
+    case 'DELIVERED':
+    case 'Доставлено':
       return StatusStyle(
         background: const Color(0xFFE8F5E9),
         foreground: const Color(0xFF2E7D32),
@@ -27,12 +36,15 @@ StatusStyle statusStyleFor(String status) {
         icon: Icons.local_shipping_rounded,
       );
     case 'Отложено':
+    case 'delayed':
+    case 'DELAYED':
       return StatusStyle(
         background: const Color(0xFFFFF3E0),
         foreground: const Color(0xFFE65100),
         icon: Icons.schedule_rounded,
       );
     case 'Новый':
+    case 'NEW':
       return StatusStyle(
         background: const Color(0xFFF3E5F5),
         foreground: const Color(0xFF6A1B9A),

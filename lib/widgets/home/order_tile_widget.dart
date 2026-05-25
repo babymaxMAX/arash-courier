@@ -9,6 +9,8 @@ import 'package:arash_curier/screens/qr_scanner_screen.dart';
 import 'package:arash_curier/screens/add_order_screen.dart';
 import 'package:arash_curier/dialogs/order_bottom_sheet.dart';
 import 'package:arash_curier/utils/app_snackbar.dart';
+import 'package:arash_curier/utils/order_status.dart';
+import 'package:arash_curier/utils/status_style.dart';
 
 class OrderTileWidget extends StatefulWidget {
   final OrderModel order;
@@ -285,9 +287,27 @@ class _OrderTileWidgetState extends State<OrderTileWidget> {
     );
   }
 
-  String _formatTime(DateTime date) {
+  String _formatTime(DateTime? date) {
+    if (date == null) return '';
     final local = date.toLocal();
     return '${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}';
+  }
+
+  void _showBottomSheet() {
+    if (_busy) return;
+    OrderBottomSheet.show(
+      context,
+      order: order,
+      onRefresh: widget.onRefresh,
+    );
+  }
+
+  Future<void> _toggleStatus() async {
+    final newStatus = OrderStatus.toggleDbStatus(order.status);
+    await _run(
+      () => DatabaseService().updateOrderStatus(order.id, newStatus),
+      success: OrderStatus.isDone(newStatus) ? 'Заказ завершён' : 'Статус сброшен',
+    );
   }
 
   void _editOrder() async {
@@ -309,8 +329,8 @@ class _OrderTileWidgetState extends State<OrderTileWidget> {
 
   @override
   Widget build(BuildContext context) {
-    final isDone = order.status == 'Готово';
-    final isDelayed = order.status == 'Отложено';
+    final isDone = OrderStatus.isDone(order.status);
+    final isDelayed = OrderStatus.isDelayed(order.status);
     final shortId = order.id.length > 8
         ? order.id.substring(0, 8).toUpperCase()
         : order.id.toUpperCase();
@@ -340,11 +360,8 @@ class _OrderTileWidgetState extends State<OrderTileWidget> {
           color: Colors.transparent,
           child: InkWell(
             borderRadius: BorderRadius.circular(16),
-            onDoubleTap: () => OrderBottomSheet.show(
-              context,
-              order: order,
-              onRefresh: widget.onRefresh,
-            ),
+            onTap: _showBottomSheet,
+            onDoubleTap: _showBottomSheet,
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
@@ -384,6 +401,13 @@ class _OrderTileWidgetState extends State<OrderTileWidget> {
                         child: Icon(Icons.notifications_active,
                             color: Colors.red, size: 20),
                       ),
+                    IconButton(
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      icon: Icon(Icons.more_horiz_rounded,
+                          color: Colors.grey.shade500),
+                      onPressed: _showBottomSheet,
+                    ),
                     if (isManager)
                       IconButton(
                         icon: const Icon(Icons.edit_note, color: Colors.blue),
@@ -398,21 +422,8 @@ class _OrderTileWidgetState extends State<OrderTileWidget> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     GestureDetector(
-                      onTap: () {
-                        showAppSnackBar(
-                            context, 'Удерживайте галочку, чтобы завершить заказ');
-                      },
-                      onLongPress: _busy
-                          ? null
-                          : () => _run(
-                                () => DatabaseService().updateOrderStatus(
-                                  order.id,
-                                  isDone ? 'Новый' : 'Готово',
-                                ),
-                                success: isDone
-                                    ? 'Статус сброшен'
-                                    : 'Заказ завершен!',
-                              ),
+                      onTap: _busy ? null : _toggleStatus,
+                      onLongPress: _busy ? null : _toggleStatus,
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 300),
                         width: 46,
@@ -598,6 +609,10 @@ class _OrderTileWidgetState extends State<OrderTileWidget> {
                       icon: Icons.qr_code_scanner,
                       color: Colors.blue,
                       onTap: _addQr,
+                    ),
+                    const Spacer(),
+                    buildStatusChip(
+                      OrderModel.translateStatus(order.status),
                     ),
                   ],
                 ),

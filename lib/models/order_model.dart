@@ -191,6 +191,8 @@ class OrderModel {
     switch (englishStatus.toUpperCase()) {
       case 'READY':
         return 'Готово';
+      case 'IN_WAREHOUSE':
+        return 'На складе';
       case 'WAITING':
         return 'Ожидает';
       case 'ISSUED':

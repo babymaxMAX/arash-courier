@@ -10,7 +10,6 @@ import 'package:arash_curier/screens/add_order_screen.dart';
 import 'package:arash_curier/dialogs/order_bottom_sheet.dart';
 import 'package:arash_curier/utils/app_snackbar.dart';
 import 'package:arash_curier/utils/order_status.dart';
-import 'package:arash_curier/utils/status_style.dart';
 
 class OrderTileWidget extends StatefulWidget {
   final OrderModel order;
@@ -375,9 +374,9 @@ class _OrderTileWidgetState extends State<OrderTileWidget> {
                     Text(
                       'APP - $shortId',
                       style: TextStyle(
-                        fontSize: 12,
+                        fontSize: 14,
                         color: Colors.grey.shade600,
-                        fontWeight: FontWeight.w600,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                     if (isDone) ...[
@@ -461,9 +460,11 @@ class _OrderTileWidgetState extends State<OrderTileWidget> {
                         children: [
                           Text(
                             order.clientName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w800,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
                               decoration:
                                   isDone ? TextDecoration.lineThrough : null,
                             ),
@@ -611,8 +612,27 @@ class _OrderTileWidgetState extends State<OrderTileWidget> {
                       onTap: _addQr,
                     ),
                     const Spacer(),
-                    buildStatusChip(
-                      OrderModel.translateStatus(order.status),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade100,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.schedule_rounded, size: 14, color: Colors.grey.shade600),
+                          const SizedBox(width: 4),
+                          Text(
+                            _formatTime(order.dateCreated),
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.grey.shade700,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),

@@ -1,6 +1,8 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
-import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:arash_curier/models/order_model.dart';
 import 'package:arash_curier/services/realtime_service.dart';
 import 'package:arash_curier/services/database_service.dart';
@@ -31,6 +33,24 @@ class _HomeScreenState extends State<HomeScreen> {
   String _userRole = 'courier';
   String _userEmail = '';
   int _currentIndex = 0; // Индекс для нижнего меню
+  List<String> _customOrder = [];
+  static const _customOrderPrefsKey = 'pvz_folder_order';
+
+  Future<void> _loadCustomOrder() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_customOrderPrefsKey);
+    if (raw == null) return;
+    try {
+      final list = (jsonDecode(raw) as List).map((e) => e.toString()).toList();
+      if (mounted) setState(() => _customOrder = list);
+    } catch (_) {}
+  }
+
+  Future<void> _saveCustomOrder(List<String> order) async {
+    _customOrder = order;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_customOrderPrefsKey, jsonEncode(order));
+  }
 
   String get _roleName {
     if (_userRole == 'admin' || _userRole == 'manager') return 'Менеджер';
@@ -121,6 +141,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _initData();
+    _loadCustomOrder();
 
     _realtimeService.subscribeToOrders(() {
       if (mounted) {
@@ -224,7 +245,6 @@ class _HomeScreenState extends State<HomeScreen> {
                       totalOrders: _totalOrders,
                       completedOrders: _completedOrders,
                       pendingOrders: _pendingOrders,
-                      folderCount: _allOrders?.length ?? 0,
                     ),
                     Padding(
                       padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
@@ -334,43 +354,61 @@ class _HomeScreenState extends State<HomeScreen> {
                                 ],
                               ),
                             )
-                          : RefreshIndicator(
-                              onRefresh: _refreshOrders,
-                              child: AnimationLimiter(
-                                child: ListView.builder(
+                          : Builder(builder: (context) {
+                              final orderedKeys = sortFolderKeys(
+                                filtered.keys.toList(),
+                                filtered,
+                                _customOrder,
+                              );
+                              final activeKeys = orderedKeys
+                                  .where((k) => !isFolderDone(filtered[k]!))
+                                  .toList();
+                              final doneKeys = orderedKeys
+                                  .where((k) => isFolderDone(filtered[k]!))
+                                  .toList();
+
+                              Widget buildCard(String folderKey) => PvzFolderCard(
+                                    key: ValueKey(folderKey),
+                                    folderKey: folderKey,
+                                    orders: sortOrders(filtered[folderKey]!),
+                                    userRole: _userRole,
+                                    userEmail: _userEmail,
+                                    onRefresh: _refreshOrders,
+                                  );
+
+                              return RefreshIndicator(
+                                onRefresh: _refreshOrders,
+                                child: ListView(
                                   physics: const AlwaysScrollableScrollPhysics(),
                                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 88),
-                                  itemCount: filtered.keys.length,
-                                  itemBuilder: (context, index) {
-                                    final keys = filtered.keys.toList()..sort((a, b) {
-                                      final aOther = a.toLowerCase().startsWith('другое');
-                                      final bOther = b.toLowerCase().startsWith('другое');
-                                      if (aOther && !bOther) return 1;
-                                      if (!aOther && bOther) return -1;
-                                      return a.compareTo(b);
-                                    });
-                                    final folderKey = keys[index];
-                                    final orders = sortOrders(filtered[folderKey]!);
-                                    return AnimationConfiguration.staggeredList(
-                                      position: index,
-                                      duration: const Duration(milliseconds: 375),
-                                      child: SlideAnimation(
-                                        verticalOffset: 50.0,
-                                        child: FadeInAnimation(
-                                          child: PvzFolderCard(
-                                            folderKey: folderKey,
-                                            orders: orders,
-                                            userRole: _userRole,
-                                            userEmail: _userEmail,
-                                            onRefresh: _refreshOrders,
-                                          ),
-                                        ),
-                                      ),
-                                    );
-                                  },
+                                  children: [
+                                    ReorderableListView.builder(
+                                      shrinkWrap: true,
+                                      physics: const NeverScrollableScrollPhysics(),
+                                      buildDefaultDragHandles: false,
+                                      itemCount: activeKeys.length,
+                                      onReorder: (oldIndex, newIndex) {
+                                        final reordered = List<String>.from(activeKeys);
+                                        if (newIndex > oldIndex) newIndex -= 1;
+                                        final moved = reordered.removeAt(oldIndex);
+                                        reordered.insert(newIndex, moved);
+                                        setState(() {});
+                                        _saveCustomOrder(reordered);
+                                      },
+                                      itemBuilder: (context, index) {
+                                        final folderKey = activeKeys[index];
+                                        return ReorderableDragStartListener(
+                                          key: ValueKey(folderKey),
+                                          index: index,
+                                          child: buildCard(folderKey),
+                                        );
+                                      },
+                                    ),
+                                    ...doneKeys.map(buildCard),
+                                  ],
                                 ),
-                              ),
-                            ),
+                              );
+                            }),
                     ),
                   ],
                 )
@@ -425,13 +463,11 @@ class _StatsBanner extends StatelessWidget {
   final int totalOrders;
   final int completedOrders;
   final int pendingOrders;
-  final int folderCount;
 
   const _StatsBanner({
     required this.totalOrders,
     required this.completedOrders,
     required this.pendingOrders,
-    required this.folderCount,
   });
 
   @override
@@ -460,17 +496,9 @@ class _StatsBanner extends StatelessWidget {
                 _StatItem(
                   icon: Icons.inventory_2_rounded,
                   value: '$totalOrders',
-                  label: 'Всего заказов',
+                  label: 'Заказов сегодня',
                   iconColor: const Color(0xFF2962FF),
                   bgColor: const Color(0xFFE3F2FD),
-                ),
-                const SizedBox(height: 16),
-                _StatItem(
-                  icon: Icons.store_rounded,
-                  value: '$folderCount',
-                  label: 'Адресов (ПВЗ)',
-                  iconColor: const Color(0xFF8E24AA),
-                  bgColor: const Color(0xFFF3E5F5),
                 ),
               ],
             ),

@@ -37,8 +37,22 @@ class PvzFolderCard extends StatelessWidget {
     // Проверяем, взят ли этот адрес в работу (кто responsiblePerson у первого заказа)
     final responsible = orders.isNotEmpty ? orders.first.responsiblePerson : '';
     final isTaken = responsible.isNotEmpty;
+    final canRelease = isTaken && (responsible == userEmail || userRole == 'admin' || userRole == 'manager');
 
-    return Container(
+    Future<void> takeOrRelease() async {
+      try {
+        if (!isTaken) {
+          await DatabaseService().takeFolderInWork(orders.map((o) => o.id).toList(), userEmail);
+        } else if (canRelease) {
+          await DatabaseService().releaseFolderFromWork(orders.map((o) => o.id).toList());
+        }
+        onRefresh();
+      } catch (e) {
+        // ignore error
+      }
+    }
+
+    final swipeCard = Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -85,55 +99,18 @@ class PvzFolderCard extends StatelessWidget {
                 : Text(style.initials, style: TextStyle(color: style.color, fontWeight: FontWeight.bold, fontSize: 14)),
             ),
             children: [
-            if (!isTaken)
+            if (!isTaken || canRelease)
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                child: SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blue.shade600,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+                child: Row(
+                  children: [
+                    Icon(Icons.swipe_right_alt_rounded, size: 16, color: Colors.grey.shade500),
+                    const SizedBox(width: 6),
+                    Text(
+                      isTaken ? 'Смахните карточку вправо, чтобы отказаться' : 'Смахните карточку вправо, чтобы взять в работу',
+                      style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
                     ),
-                    onPressed: () async {
-                      try {
-                        await DatabaseService().takeFolderInWork(orders.map((o) => o.id).toList(), userEmail);
-                        onRefresh();
-                      } catch (e) {
-                        // ignore error
-                      }
-                    },
-                    icon: const Icon(Icons.handshake),
-                    label: const Text('Взять в работу адрес', style: TextStyle(fontWeight: FontWeight.bold)),
-                  ),
-                ),
-              )
-            else if (responsible == userEmail || userRole == 'admin' || userRole == 'manager')
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                child: SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.red.shade50,
-                      foregroundColor: Colors.red.shade700,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      elevation: 0,
-                    ),
-                    onPressed: () async {
-                      try {
-                        await DatabaseService().releaseFolderFromWork(orders.map((o) => o.id).toList());
-                        onRefresh();
-                      } catch (e) {
-                        // ignore error
-                      }
-                    },
-                    icon: const Icon(Icons.close_rounded),
-                    label: const Text('Отказаться от адреса', style: TextStyle(fontWeight: FontWeight.bold)),
-                  ),
+                  ],
                 ),
               ),
             ...orders.map(
@@ -147,7 +124,39 @@ class PvzFolderCard extends StatelessWidget {
           ],
         ),
       ),
-    ),
-  );
+      ),
+    );
+
+    if (!isTaken || canRelease) {
+      return Dismissible(
+        key: ValueKey('swipe-$folderKey'),
+        direction: DismissDirection.startToEnd,
+        confirmDismiss: (_) async {
+          await takeOrRelease();
+          return false;
+        },
+        background: Container(
+          margin: const EdgeInsets.only(bottom: 16),
+          padding: const EdgeInsets.only(left: 24),
+          alignment: Alignment.centerLeft,
+          decoration: BoxDecoration(
+            color: isTaken ? Colors.red.shade400 : Colors.blue.shade600,
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Row(
+            children: [
+              Icon(isTaken ? Icons.close_rounded : Icons.handshake, color: Colors.white),
+              const SizedBox(width: 8),
+              Text(
+                isTaken ? 'Отказаться' : 'Взять в работу',
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+        ),
+        child: swipeCard,
+      );
+    }
+    return swipeCard;
   }
 }

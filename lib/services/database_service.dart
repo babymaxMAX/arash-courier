@@ -34,16 +34,20 @@ class DatabaseService {
         final List<dynamic> allRows = [];
         int offset = 0;
         const int limit = 1000;
+        final todayStart = DateTime.now().toLocal();
+        final todayStartIso =
+            DateTime(todayStart.year, todayStart.month, todayStart.day)
+                .toIso8601String();
 
         while (true) {
           var query = supabase.from('orders').select();
 
           if (role == 'courier') {
-            query = query.not(
-              'status',
-              'in',
-              '("Выдано", "Отменено", "Возврат", "ISSUED", "CANCELLED", "CANCELED", "RETURN", "RETURNED")',
-            );
+            // Курьеру показываем только то, что ещё ждёт (WAITING) или уже
+            // забрано и готово (READY/SHIPPING) сегодня — не всю историю.
+            query = query
+                .inFilter('status', ['WAITING', 'READY', 'SHIPPING'])
+                .gte('date_created', todayStartIso);
           }
 
           final response = await query.range(offset, offset + limit - 1);

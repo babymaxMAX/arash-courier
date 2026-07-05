@@ -14,6 +14,49 @@
 
 import 'package:arash_curier/models/order_model.dart';
 
+bool isFolderDone(List<OrderModel> orders) {
+  return orders.isNotEmpty &&
+      orders.every((o) => o.status == 'Готово' || o.status == 'SHIPPING');
+}
+
+/// Порядок папок ПВЗ: сначала активные (в ручном порядке пользователя, если
+/// задан, иначе по алфавиту, "другое" всегда последним среди активных),
+/// затем полностью завершённые — внизу. Как только в завершённую папку
+/// попадает новый заказ, она перестаёт быть "done" и сама возвращается
+/// в активную группу на своё место.
+List<String> sortFolderKeys(
+  List<String> keys,
+  Map<String, List<OrderModel>> grouped,
+  List<String> customOrder,
+) {
+  final active = <String>[];
+  final done = <String>[];
+  for (final k in keys) {
+    if (isFolderDone(grouped[k] ?? [])) {
+      done.add(k);
+    } else {
+      active.add(k);
+    }
+  }
+
+  int customIndex(String k) {
+    final i = customOrder.indexOf(k);
+    return i == -1 ? customOrder.length : i;
+  }
+
+  active.sort((a, b) {
+    final ci = customIndex(a).compareTo(customIndex(b));
+    if (ci != 0) return ci;
+    final aOther = a.toLowerCase().startsWith('другое');
+    final bOther = b.toLowerCase().startsWith('другое');
+    if (aOther && !bOther) return 1;
+    if (!aOther && bOther) return -1;
+    return a.compareTo(b);
+  });
+  done.sort((a, b) => a.compareTo(b));
+  return [...active, ...done];
+}
+
 List<OrderModel> sortOrders(List<OrderModel> orders) {
   List<OrderModel> copy = List.from(orders);
   copy.sort((a, b) {

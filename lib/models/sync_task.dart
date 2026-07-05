@@ -12,6 +12,7 @@ abstract class SyncActionType {
   static const addComment = 'add_comment';
   static const updatePayment = 'update_payment';
   static const delayOrder = 'delay_order';
+  static const receiveOrder = 'receive_order';
   static const updatePvzQr = 'update_pvz_qr';
   static const updateClientQr = 'update_client_qr';
   static const addPvzQr = 'add_pvz_qr';

@@ -240,6 +240,31 @@ class DatabaseService {
     await _sync.addTask(SyncActionType.delayOrder, id, payload);
   }
 
+  Future<void> markReceivedByCourier(String id) async {
+    final now = DateTime.now().toUtc();
+
+    await _sync.applyLocalOrderPatch(id, (o) {
+      o.receivedAt = now;
+    });
+
+    final payload = jsonEncode({'received_at': now.toIso8601String()});
+
+    if (await _isOnline()) {
+      try {
+        await supabase
+            .from('orders')
+            .update({'received_at': now.toIso8601String()})
+            .eq('id', id);
+        return;
+      } catch (e) {
+        await _sync.addTask(SyncActionType.receiveOrder, id, payload);
+        rethrow;
+      }
+    }
+
+    await _sync.addTask(SyncActionType.receiveOrder, id, payload);
+  }
+
   Future<String?> uploadOrderPhoto(String id, File imageFile) async {
     final localPath = imageFile.path;
     await _sync.applyLocalOrderPatch(id, (o) {

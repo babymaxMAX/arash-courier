@@ -152,6 +152,12 @@ class SyncService {
         await supabase.from('orders').update(update).eq('id', task.orderId);
         break;
 
+      case SyncActionType.receiveOrder:
+        await supabase.from('orders').update({
+          'received_at': data['received_at'] ?? task.payload,
+        }).eq('id', task.orderId);
+        break;
+
       case SyncActionType.updatePvzQr:
         await supabase.from('orders').update({
           'pvz_qr_code': data['qrCode'] ?? task.payload,

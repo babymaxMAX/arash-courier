@@ -612,6 +612,31 @@ class _OrderTileWidgetState extends State<OrderTileWidget> {
                       onTap: _addQr,
                     ),
                     const Spacer(),
+                    if (order.receivedAt != null) ...[
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.blue.shade50,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.local_shipping_rounded, size: 14, color: Colors.blue.shade700),
+                            const SizedBox(width: 4),
+                            Text(
+                              _formatTime(order.receivedAt),
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.blue.shade700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                    ],
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(

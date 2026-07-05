@@ -35,6 +35,9 @@ class OrderModel {
   String? comment;
   String? cancelReason;
 
+  /// Когда курьер физически забрал заказ с ПВЗ (заполняется вручную из карточки).
+  DateTime? receivedAt;
+
   late double clientPayment;
   late double debtAmount;
   late double deliveryPrice;
@@ -85,6 +88,7 @@ class OrderModel {
     required String status,
     String? comment,
     String? cancelReason,
+    DateTime? receivedAt,
     required double clientPayment,
     required double debtAmount,
     required double deliveryPrice,
@@ -105,6 +109,7 @@ class OrderModel {
       ..status = status
       ..comment = comment
       ..cancelReason = cancelReason
+      ..receivedAt = receivedAt
       ..clientPayment = clientPayment
       ..debtAmount = debtAmount
       ..deliveryPrice = deliveryPrice
@@ -126,6 +131,7 @@ class OrderModel {
     String? status,
     String? comment,
     String? cancelReason,
+    DateTime? receivedAt,
     double? clientPayment,
     double? debtAmount,
     double? deliveryPrice,
@@ -146,6 +152,7 @@ class OrderModel {
       status: status ?? this.status,
       comment: comment ?? this.comment,
       cancelReason: cancelReason ?? this.cancelReason,
+      receivedAt: receivedAt ?? this.receivedAt,
       clientPayment: clientPayment ?? this.clientPayment,
       debtAmount: debtAmount ?? this.debtAmount,
       deliveryPrice: deliveryPrice ?? this.deliveryPrice,
@@ -180,6 +187,9 @@ class OrderModel {
       debtAmount: (json['debt_amount'] as num?)?.toDouble() ?? 0.0,
       deliveryPrice: (json['delivery_price'] as num?)?.toDouble() ?? 0.0,
       pointsDeduction: (json['points_deduction'] as num?)?.toDouble() ?? 0.0,
+      receivedAt: json['received_at'] != null
+          ? DateTime.tryParse(json['received_at'].toString())
+          : null,
     );
   }
 
@@ -250,6 +260,7 @@ class OrderModel {
       'debt_amount': debtAmount,
       'delivery_price': deliveryPrice,
       'points_deduction': pointsDeduction,
+      'received_at': receivedAt?.toIso8601String(),
     };
   }
 }

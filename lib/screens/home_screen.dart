@@ -57,6 +57,8 @@ class _HomeScreenState extends State<HomeScreen> {
     return 'Курьер';
   }
 
+  bool get _isManager => _userRole == 'admin' || _userRole == 'manager';
+
   int get _totalOrders {
     final orders = _allOrders;
     if (orders == null) return 0;
@@ -178,11 +180,6 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     final filtered = filterOrdersBySearch(_allOrders ?? {}, _searchQuery, _selectedPvz, _selectedAddress);
 
-    final pvzs = _allOrders?.values.expand((l) => l).map((o) => o.companyName).where((e) => e.isNotEmpty).toSet().toList() ?? [];
-    final addresses = _allOrders?.values.expand((l) => l).map((o) => o.companyAddress).where((e) => e.isNotEmpty).toSet().toList() ?? [];
-    pvzs.sort();
-    addresses.sort();
-
     // Цвет бренда ПВЗ из ТЗ
     const Color brandGreen = Color(0xFF2E7D32);
 
@@ -207,7 +204,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ],
             ),
-            const Text('Смена открыта', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w400, color: Colors.white70)),
+            if (!_isManager)
+              const Text('Смена открыта', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w400, color: Colors.white70)),
           ],
         ),
         actions: [
@@ -241,11 +239,12 @@ class _HomeScreenState extends State<HomeScreen> {
               ? const Center(child: CircularProgressIndicator())
               : Column(
                   children: [
-                    _StatsBanner(
-                      totalOrders: _totalOrders,
-                      completedOrders: _completedOrders,
-                      pendingOrders: _pendingOrders,
-                    ),
+                    if (!_isManager)
+                      _StatsBanner(
+                        totalOrders: _totalOrders,
+                        completedOrders: _completedOrders,
+                        pendingOrders: _pendingOrders,
+                      ),
                     Padding(
                       padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
                       child: TextField(
@@ -272,54 +271,6 @@ class _HomeScreenState extends State<HomeScreen> {
                         onChanged: (value) {
                           setState(() => _searchQuery = value.toLowerCase());
                         },
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: DropdownButton<String>(
-                                underline: const SizedBox(),
-                                hint: const Text('Все ПВЗ', style: TextStyle(fontSize: 14)),
-                                value: _selectedPvz,
-                                isExpanded: true,
-                                items: [
-                                  const DropdownMenuItem(value: null, child: Text('Все ПВЗ', style: TextStyle(fontSize: 14))),
-                                  ...pvzs.map((p) => DropdownMenuItem(value: p, child: Text(p, style: const TextStyle(fontSize: 14)))),
-                                ],
-                                onChanged: (v) => setState(() => _selectedPvz = v),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: DropdownButton<String>(
-                                underline: const SizedBox(),
-                                hint: const Text('Все адреса', style: TextStyle(fontSize: 14)),
-                                value: _selectedAddress,
-                                isExpanded: true,
-                                items: [
-                                  const DropdownMenuItem(value: null, child: Text('Все адреса', style: TextStyle(fontSize: 14))),
-                                  ...addresses.map((a) => DropdownMenuItem(value: a, child: Text(a, style: const TextStyle(fontSize: 14)))),
-                                ],
-                                onChanged: (v) => setState(() => _selectedAddress = v),
-                              ),
-                            ),
-                          ),
-                        ],
                       ),
                     ),
                     Expanded(
@@ -374,6 +325,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                     userRole: _userRole,
                                     userEmail: _userEmail,
                                     onRefresh: _refreshOrders,
+                                    compact: _isManager,
                                   );
 
                               return RefreshIndicator(

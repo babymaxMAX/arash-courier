@@ -10,6 +10,7 @@ class PvzFolderCard extends StatelessWidget {
   final String userRole;
   final String userEmail;
   final VoidCallback onRefresh;
+  final bool compact;
 
   const PvzFolderCard({
     super.key,
@@ -18,6 +19,7 @@ class PvzFolderCard extends StatelessWidget {
     required this.userRole,
     required this.userEmail,
     required this.onRefresh,
+    this.compact = false,
   });
 
   @override
@@ -53,53 +55,72 @@ class PvzFolderCard extends StatelessWidget {
     }
 
     final swipeCard = Container(
-      margin: const EdgeInsets.only(bottom: 16),
+      margin: EdgeInsets.only(bottom: compact ? 6 : 16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        borderRadius: BorderRadius.circular(compact ? 12 : 20),
+        boxShadow: compact
+            ? null
+            : [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
         border: Border.all(color: style.color.withValues(alpha: 0.15), width: 1),
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(compact ? 12 : 20),
         child: Theme(
-          data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+          data: Theme.of(context).copyWith(
+            dividerColor: Colors.transparent,
+            visualDensity: compact ? VisualDensity.compact : VisualDensity.standard,
+          ),
           child: ExpansionTile(
-            title: Text(company, style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: style.color)),
-            subtitle: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SizedBox(height: 4),
-                Text(address, style: const TextStyle(fontWeight: FontWeight.w500)),
-                const SizedBox(height: 8),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: LinearProgressIndicator(
-                    value: progress,
-                    backgroundColor: Colors.grey.shade100,
-                    color: style.color,
-                    minHeight: 6,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text('$doneCount из ${orders.length} готово', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey.shade500)),
-              ],
+            dense: compact,
+            tilePadding: compact
+                ? const EdgeInsets.symmetric(horizontal: 10, vertical: 0)
+                : null,
+            title: Text(
+              company,
+              style: TextStyle(fontWeight: FontWeight.w800, fontSize: compact ? 13 : 16, color: style.color),
             ),
+            subtitle: compact
+                ? Text(
+                    '$address · $doneCount/${orders.length}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                  )
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SizedBox(height: 4),
+                      Text(address, style: const TextStyle(fontWeight: FontWeight.w500)),
+                      const SizedBox(height: 8),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: LinearProgressIndicator(
+                          value: progress,
+                          backgroundColor: Colors.grey.shade100,
+                          color: style.color,
+                          minHeight: 6,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text('$doneCount из ${orders.length} готово', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey.shade500)),
+                    ],
+                  ),
             leading: CircleAvatar(
-              radius: 24,
+              radius: compact ? 14 : 24,
               backgroundColor: isTaken ? Colors.grey.shade100 : style.color.withValues(alpha: 0.1),
-              child: isTaken 
-                ? Text(getUserAvatar(responsible), style: const TextStyle(fontSize: 22))
-                : Text(style.initials, style: TextStyle(color: style.color, fontWeight: FontWeight.bold, fontSize: 14)),
+              child: isTaken
+                  ? Text(getUserAvatar(responsible), style: TextStyle(fontSize: compact ? 13 : 22))
+                  : Text(style.initials, style: TextStyle(color: style.color, fontWeight: FontWeight.bold, fontSize: compact ? 9 : 14)),
             ),
             children: [
-            if (!isTaken || canRelease)
+            if (!compact && (!isTaken || canRelease))
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
                 child: Row(

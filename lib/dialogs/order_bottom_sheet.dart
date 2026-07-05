@@ -4,8 +4,15 @@ import 'package:arash_curier/screens/chat_screen.dart';
 import 'package:arash_curier/dialogs/order_comment_dialog.dart';
 import 'package:arash_curier/dialogs/order_delay_dialog.dart';
 import 'package:arash_curier/dialogs/order_payment_dialog.dart';
+import 'package:arash_curier/services/database_service.dart';
+import 'package:arash_curier/utils/app_snackbar.dart';
 
 class OrderBottomSheet {
+  static String _formatTime(DateTime date) {
+    final local = date.toLocal();
+    return '${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}';
+  }
+
   static Future<void> show(
     BuildContext context, {
     required OrderModel order,
@@ -60,6 +67,28 @@ class OrderBottomSheet {
                     initialComment: order.comment ?? '',
                     onSaved: onRefresh,
                   );
+                },
+              ),
+              _SheetTile(
+                icon: Icons.local_shipping_rounded,
+                color: const Color(0xFF0277BD),
+                title: 'Получено курьером',
+                subtitle: order.receivedAt != null
+                    ? 'Забрано в ${_formatTime(order.receivedAt!)}'
+                    : 'Отметить время получения',
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  try {
+                    await DatabaseService().markReceivedByCourier(order.id);
+                    onRefresh();
+                    if (context.mounted) {
+                      showAppSnackBar(context, 'Отмечено как получено');
+                    }
+                  } catch (e) {
+                    if (context.mounted) {
+                      showAppSnackBar(context, 'Ошибка: $e', isError: true);
+                    }
+                  }
                 },
               ),
               _SheetTile(

@@ -1,7 +1,10 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:arash_curier/models/order_model.dart';
 import 'package:arash_curier/services/realtime_service.dart';
@@ -13,6 +16,7 @@ import 'package:arash_curier/screens/chat_screen.dart';
 import 'package:arash_curier/screens/qr_scanner_screen.dart';
 import 'package:arash_curier/utils/order_grouping.dart';
 import 'package:arash_curier/utils/app_snackbar.dart';
+import 'package:arash_curier/utils/media_kind.dart';
 import 'package:arash_curier/utils/pvz_style.dart';
 import 'package:arash_curier/widgets/home/pvz_folder_card.dart';
 
@@ -36,6 +40,7 @@ class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0; // Индекс для нижнего меню
   List<String> _customOrder = [];
   static const _customOrderPrefsKey = 'pvz_folder_order';
+  StreamSubscription<List<SharedMediaFile>>? _intentSub;
 
   Future<void> _loadCustomOrder() async {
     final prefs = await SharedPreferences.getInstance();
@@ -142,6 +147,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _createOrder({
     String? prefillCompanyName,
     String? prefillCompanyAddress,
+    File? prefillPendingMedia,
   }) async {
     final result = await Navigator.push<OrderModel>(
       context,
@@ -149,18 +155,47 @@ class _HomeScreenState extends State<HomeScreen> {
         builder: (context) => AddOrderScreen(
           prefillCompanyName: prefillCompanyName,
           prefillCompanyAddress: prefillCompanyAddress,
+          prefillPendingMedia: prefillPendingMedia,
         ),
       ),
     );
     if (result == null || !mounted) return;
     try {
       await DatabaseService().createOrder(result);
+      if (prefillPendingMedia != null) {
+        await DatabaseService().addOrderMedia(
+          result.id,
+          prefillPendingMedia,
+          [],
+          isVideo: isVideoAttachment(prefillPendingMedia.path),
+        );
+      }
       if (!mounted) return;
       showAppSnackBar(context, 'Заказ создан');
       _refreshOrders();
     } catch (e) {
       if (mounted) showAppSnackBar(context, 'Ошибка создания: $e', isError: true);
     }
+  }
+
+  Future<void> _initSharingIntent() async {
+    final initial = await ReceiveSharingIntent.instance.getInitialMedia();
+    if (initial.isNotEmpty) {
+      _handleSharedMedia(initial);
+      ReceiveSharingIntent.instance.reset();
+    }
+    _intentSub = ReceiveSharingIntent.instance.getMediaStream().listen((media) {
+      if (media.isNotEmpty) {
+        _handleSharedMedia(media);
+        ReceiveSharingIntent.instance.reset();
+      }
+    });
+  }
+
+  void _handleSharedMedia(List<SharedMediaFile> media) {
+    if (!_isManager || !mounted) return;
+    final file = media.first;
+    _createOrder(prefillPendingMedia: File(file.path));
   }
 
   @override
@@ -190,6 +225,8 @@ class _HomeScreenState extends State<HomeScreen> {
       debugPrint('Ошибка получения роли: $e');
     } finally {
       await _refreshOrders();
+      // Роль должна быть загружена до обработки шаринга — фича только для менеджеров.
+      _initSharingIntent();
     }
   }
 
@@ -197,6 +234,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void dispose() {
     _realtimeService.dispose();
     _searchController.dispose();
+    _intentSub?.cancel();
     super.dispose();
   }
 

@@ -1,6 +1,9 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:arash_curier/models/order_model.dart';
+import 'package:arash_curier/utils/media_kind.dart';
 import 'package:uuid/uuid.dart';
 
 /// Города доставки — фиксированный список реальных пунктов ARASH (таблица
@@ -15,11 +18,16 @@ class AddOrderScreen extends StatefulWidget {
   final String? prefillCompanyName;
   final String? prefillCompanyAddress;
 
+  /// Фото/видео, полученное через системное «Поделиться» (например, фото
+  /// штрих-кода из Telegram) — прикрепляется к заказу сразу после создания.
+  final File? prefillPendingMedia;
+
   const AddOrderScreen({
     super.key,
     this.orderToEdit,
     this.prefillCompanyName,
     this.prefillCompanyAddress,
+    this.prefillPendingMedia,
   });
 
   @override
@@ -202,6 +210,49 @@ class _AddOrderScreenState extends State<AddOrderScreen> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
+            if (widget.prefillPendingMedia != null) ...[
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.green.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.green.shade200),
+                ),
+                child: Row(
+                  children: [
+                    isVideoAttachment(widget.prefillPendingMedia!.path)
+                        ? Container(
+                            width: 44,
+                            height: 44,
+                            decoration: BoxDecoration(
+                              color: Colors.black87,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Icon(Icons.play_circle_fill, color: Colors.white),
+                          )
+                        : ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Image.file(
+                              widget.prefillPendingMedia!,
+                              width: 44,
+                              height: 44,
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        isVideoAttachment(widget.prefillPendingMedia!.path)
+                            ? 'Видео из «Поделиться» будет прикреплено к заказу'
+                            : 'Фото из «Поделиться» будет прикреплено к заказу',
+                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
             Autocomplete<String>(
               initialValue: TextEditingValue(text: widget.orderToEdit?.clientName ?? ''),
               optionsBuilder: (value) {

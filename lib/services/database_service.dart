@@ -425,15 +425,28 @@ class DatabaseService {
     String id,
     File imageFile,
     List<String> currentPhotos,
-  ) async {
+  ) =>
+      addOrderMedia(id, imageFile, currentPhotos, isVideo: false);
+
+  /// [isVideo] chooses the storage filename shape (`video_order_...mp4` vs
+  /// `order_...jpg`) so the media viewer can tell photos and videos apart.
+  Future<String?> addOrderMedia(
+    String id,
+    File mediaFile,
+    List<String> currentPhotos, {
+    required bool isVideo,
+  }) async {
+    final ext = isVideo ? 'mp4' : 'jpg';
     if (await _isOnline()) {
       try {
         final uniqueSuffix = DateTime.now().millisecondsSinceEpoch;
-        final fileName = 'order_${id}_$uniqueSuffix.jpg';
+        final fileName = isVideo
+            ? 'video_order_${id}_$uniqueSuffix.$ext'
+            : 'order_${id}_$uniqueSuffix.$ext';
 
         await supabase.storage.from('packages').upload(
           fileName,
-          imageFile,
+          mediaFile,
           fileOptions: const FileOptions(upsert: true),
         );
 
@@ -454,8 +467,9 @@ class DatabaseService {
       }
     } else {
       final dir = await getApplicationDocumentsDirectory();
-      final localImage = await imageFile.copy(
-        '${dir.path}/offline_${DateTime.now().millisecondsSinceEpoch}.jpg',
+      final prefix = isVideo ? 'offline_video_' : 'offline_';
+      final localImage = await mediaFile.copy(
+        '${dir.path}/$prefix${DateTime.now().millisecondsSinceEpoch}.$ext',
       );
       await _sync.applyLocalOrderPatch(id, (o) {
         if (!o.photos.contains(localImage.path)) {
@@ -467,7 +481,9 @@ class DatabaseService {
         id,
         localImage.path,
       );
-      return 'ОФФЛАЙН: Фото сохранено. Оно будет отправлено при появлении сети.';
+      return isVideo
+          ? 'ОФФЛАЙН: Видео сохранено. Оно будет отправлено при появлении сети.'
+          : 'ОФФЛАЙН: Фото сохранено. Оно будет отправлено при появлении сети.';
     }
   }
 

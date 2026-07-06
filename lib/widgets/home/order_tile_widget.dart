@@ -7,9 +7,11 @@ import 'package:arash_curier/models/order_model.dart';
 import 'package:arash_curier/services/database_service.dart';
 import 'package:arash_curier/screens/qr_scanner_screen.dart';
 import 'package:arash_curier/screens/add_order_screen.dart';
+import 'package:arash_curier/screens/media_viewer_screen.dart';
 import 'package:arash_curier/dialogs/order_bottom_sheet.dart';
 import 'package:arash_curier/utils/app_snackbar.dart';
 import 'package:arash_curier/utils/order_status.dart';
+import 'package:arash_curier/utils/media_kind.dart';
 
 class OrderTileWidget extends StatefulWidget {
   final OrderModel order;
@@ -91,68 +93,55 @@ class _OrderTileWidgetState extends State<OrderTileWidget> {
     }
   }
 
-  void _showPhotoOptions(String photoUrl) {
-    showModalBottomSheet(
-      context: context,
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              height: 250,
-              width: double.infinity,
-              decoration: BoxDecoration(
-                image: DecorationImage(
-                  image: _photoImage(photoUrl),
-                  fit: BoxFit.cover,
-                ),
-              ),
-            ),
-            ListTile(
-              leading: const Icon(Icons.cameraswitch, color: Colors.blue),
-              title: const Text('Заменить фото'),
-              onTap: () async {
-                Navigator.pop(ctx);
-                try {
-                  final picker = ImagePicker();
-                  final file = await picker.pickImage(
-                    source: ImageSource.camera,
-                    imageQuality: 80,
-                    preferredCameraDevice: CameraDevice.rear,
-                  );
-                  if (file == null) return;
+  /// Одна кнопка для менеджера: сразу открывает галерею (фото или видео),
+  /// без диалогов, и прикрепляет выбранное к заказу.
+  Future<void> _pickFromGallery() async {
+    try {
+      final picker = ImagePicker();
+      final file = await picker.pickMedia();
+      if (file == null) return;
+      final isVideo = isVideoAttachment(file.path);
+      await _run(
+        () => DatabaseService().addOrderMedia(
+          order.id,
+          File(file.path),
+          order.photos,
+          isVideo: isVideo,
+        ),
+        success: isVideo ? 'Видео добавлено' : 'Фото добавлено',
+      );
+    } catch (e) {
+      if (mounted) {
+        showAppSnackBar(context, 'Не удалось открыть галерею', isError: true);
+      }
+    }
+  }
 
-                  await _run(() async {
-                    await DatabaseService().addOrderPhoto(order.id, File(file.path), order.photos);
-                    await DatabaseService().removeOrderPhoto(order.id, photoUrl, order.photos);
-                    return 'Фото заменено';
-                  });
-                } catch (e) {
-                  if (mounted) {
-                    showAppSnackBar(context, 'Камера недоступна', isError: true);
-                  }
-                }
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.delete, color: Colors.red),
-              title: const Text('Удалить фото', style: TextStyle(color: Colors.red)),
-              onTap: () {
-                Navigator.pop(ctx);
-                _run(
-                  () => DatabaseService().removeOrderPhoto(
-                    order.id,
-                    photoUrl,
-                    order.photos,
-                  ),
-                  success: 'Фото удалено',
-                );
-              },
-            ),
-          ],
+  Future<void> _replaceMedia(String oldPath) async {
+    final picker = ImagePicker();
+    final file = await picker.pickMedia();
+    if (file == null) return;
+    final isVideo = isVideoAttachment(file.path);
+    await _run(() async {
+      await DatabaseService().addOrderMedia(order.id, File(file.path), order.photos, isVideo: isVideo);
+      await DatabaseService().removeOrderPhoto(order.id, oldPath, order.photos);
+      return isVideo ? 'Видео заменено' : 'Фото заменено';
+    });
+  }
+
+  void _openMediaViewer(int initialIndex) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => MediaViewerScreen(
+          order: order,
+          items: order.photos,
+          initialIndex: initialIndex,
+          onReplace: (path) => _replaceMedia(path),
+          onDelete: (path) => DatabaseService().removeOrderPhoto(order.id, path, order.photos),
         ),
       ),
-    );
+    ).then((_) => widget.onRefresh());
   }
 
   void _showQrOptions(String qrCode, bool isClient) {
@@ -536,21 +525,31 @@ class _OrderTileWidgetState extends State<OrderTileWidget> {
                       child: ListView.builder(
                         scrollDirection: Axis.horizontal,
                         itemCount: order.photos.length,
-                        itemBuilder: (ctx, i) => GestureDetector(
-                          onTap: () => _showPhotoOptions(order.photos[i]),
-                          child: Container(
-                            margin: const EdgeInsets.only(right: 8),
-                            width: 50,
-                            height: 50,
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(8),
-                              image: DecorationImage(
-                                image: _photoImage(order.photos[i]),
-                                fit: BoxFit.cover,
+                        itemBuilder: (ctx, i) {
+                          final path = order.photos[i];
+                          final isVideo = isVideoAttachment(path);
+                          return GestureDetector(
+                            onTap: () => _openMediaViewer(i),
+                            child: Container(
+                              margin: const EdgeInsets.only(right: 8),
+                              width: 50,
+                              height: 50,
+                              decoration: BoxDecoration(
+                                color: isVideo ? Colors.black87 : null,
+                                borderRadius: BorderRadius.circular(8),
+                                image: isVideo
+                                    ? null
+                                    : DecorationImage(
+                                        image: _photoImage(path),
+                                        fit: BoxFit.cover,
+                                      ),
                               ),
+                              child: isVideo
+                                  ? const Icon(Icons.play_circle_fill, color: Colors.white, size: 24)
+                                  : null,
                             ),
-                          ),
-                        ),
+                          );
+                        },
                       ),
                     ),
                   Wrap(
@@ -600,18 +599,30 @@ class _OrderTileWidgetState extends State<OrderTileWidget> {
                 const SizedBox(height: 16),
                 Row(
                   children: [
-                    _ActionButton(
-                      icon: Icons.add_a_photo,
-                      color: Colors.green,
-                      onTap: _addPhoto,
-                    ),
-                    const SizedBox(width: 8),
-                    _ActionButton(
-                      icon: Icons.qr_code_scanner,
-                      color: Colors.blue,
-                      onTap: _addQr,
-                    ),
-                    const Spacer(),
+                    if (isManager) ...[
+                      Expanded(
+                        child: _WideActionButton(
+                          icon: Icons.add_photo_alternate_rounded,
+                          label: 'Прикрепить из галереи',
+                          color: Colors.green,
+                          onTap: _pickFromGallery,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                    ] else ...[
+                      _ActionButton(
+                        icon: Icons.add_a_photo,
+                        color: Colors.green,
+                        onTap: _addPhoto,
+                      ),
+                      const SizedBox(width: 8),
+                      _ActionButton(
+                        icon: Icons.qr_code_scanner,
+                        color: Colors.blue,
+                        onTap: _addQr,
+                      ),
+                      const Spacer(),
+                    ],
                     if (order.receivedAt != null) ...[
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -695,6 +706,50 @@ class _ActionButton extends StatelessWidget {
           border: Border.all(color: color.withValues(alpha: 0.5)),
         ),
         child: Icon(icon, color: color, size: 20),
+      ),
+    );
+  }
+}
+
+class _WideActionButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _WideActionButton({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 40,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: color.withValues(alpha: 0.5)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: color, size: 18),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                label,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: color, fontWeight: FontWeight.w600, fontSize: 13),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

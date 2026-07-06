@@ -95,8 +95,14 @@ Map<String, List<OrderModel>> filterOrdersBySearch(
       final words = clientNameLower.split(RegExp(r'\s+'));
       final matchesNamePrefix = words.any((word) => word.startsWith(q));
 
-      // 4. Также ищем по ID заказа (содержит)
-      return matchesNamePrefix || order.id.toLowerCase().contains(q);
+      // 4. Также ищем по номеру заказа (содержит)
+      final matchesOrderNumber = order.id.toLowerCase().contains(q);
+
+      // 5. Точное совпадение со штрих-кодом (например, после сканирования)
+      final matchesBarcode = order.clientQrCodes.any((c) => c.toLowerCase() == q) ||
+          order.pvzQrCodes.any((c) => c.toLowerCase() == q);
+
+      return matchesNamePrefix || matchesOrderNumber || matchesBarcode;
     }).toList();
 
     if (filtered.isNotEmpty) {

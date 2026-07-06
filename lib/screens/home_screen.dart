@@ -10,6 +10,7 @@ import 'package:arash_curier/services/auth_service.dart';
 import 'package:arash_curier/screens/login_screen.dart';
 import 'package:arash_curier/screens/add_order_screen.dart';
 import 'package:arash_curier/screens/chat_screen.dart';
+import 'package:arash_curier/screens/qr_scanner_screen.dart';
 import 'package:arash_curier/utils/order_grouping.dart';
 import 'package:arash_curier/utils/app_snackbar.dart';
 import 'package:arash_curier/utils/pvz_style.dart';
@@ -121,6 +122,16 @@ class _HomeScreenState extends State<HomeScreen> {
       context,
       MaterialPageRoute(builder: (context) => const LoginScreen()),
     );
+  }
+
+  Future<void> _scanToSearch() async {
+    final code = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(builder: (context) => const QRScannerScreen()),
+    );
+    if (code == null || code.isEmpty || !mounted) return;
+    _searchController.text = code;
+    setState(() => _searchQuery = code.toLowerCase());
   }
 
   Future<void> _openAddOrder() => _createOrder();
@@ -260,30 +271,48 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     Padding(
                       padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                      child: TextField(
-                        controller: _searchController,
-                        decoration: InputDecoration(
-                          hintText: 'Клиент, ПВЗ или адрес...',
-                          fillColor: Colors.white,
-                          filled: true,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide.none,
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _searchController,
+                              decoration: InputDecoration(
+                                hintText: 'Клиент или номер заказа...',
+                                fillColor: Colors.white,
+                                filled: true,
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: BorderSide.none,
+                                ),
+                                prefixIcon: const Icon(Icons.search_rounded),
+                                suffixIcon: _searchQuery.isNotEmpty
+                                    ? IconButton(
+                                        icon: const Icon(Icons.clear_rounded),
+                                        onPressed: () {
+                                          _searchController.clear();
+                                          setState(() => _searchQuery = '');
+                                        },
+                                      )
+                                    : null,
+                              ),
+                              onChanged: (value) {
+                                setState(() => _searchQuery = value.toLowerCase());
+                              },
+                            ),
                           ),
-                          prefixIcon: const Icon(Icons.search_rounded),
-                          suffixIcon: _searchQuery.isNotEmpty
-                              ? IconButton(
-                                  icon: const Icon(Icons.clear_rounded),
-                                  onPressed: () {
-                                    _searchController.clear();
-                                    setState(() => _searchQuery = '');
-                                  },
-                                )
-                              : null,
-                        ),
-                        onChanged: (value) {
-                          setState(() => _searchQuery = value.toLowerCase());
-                        },
+                          const SizedBox(width: 8),
+                          Container(
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: IconButton(
+                              icon: const Icon(Icons.qr_code_scanner_rounded),
+                              tooltip: 'Найти по штрих-коду',
+                              onPressed: _scanToSearch,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                     Expanded(

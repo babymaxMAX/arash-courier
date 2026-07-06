@@ -12,6 +12,8 @@ import 'package:arash_curier/dialogs/order_bottom_sheet.dart';
 import 'package:arash_curier/utils/app_snackbar.dart';
 import 'package:arash_curier/utils/order_status.dart';
 import 'package:arash_curier/utils/media_kind.dart';
+import 'package:arash_curier/utils/order_type_style.dart';
+import 'package:arash_curier/widgets/home/order_progress_bar.dart';
 
 class OrderTileWidget extends StatefulWidget {
   final OrderModel order;
@@ -319,6 +321,7 @@ class _OrderTileWidgetState extends State<OrderTileWidget> {
   Widget build(BuildContext context) {
     final isDone = OrderStatus.isDone(order.status);
     final isDelayed = OrderStatus.isDelayed(order.status);
+    final typeStyle = getOrderTypeStyle(order.orderType);
     final shortId = order.id.length > 8
         ? order.id.substring(0, 8).toUpperCase()
         : order.id.toUpperCase();
@@ -357,9 +360,29 @@ class _OrderTileWidgetState extends State<OrderTileWidget> {
                 children: [
                 Row(
                   children: [
-                    Icon(Icons.smart_toy_outlined,
-                        size: 16, color: Colors.grey.shade500),
-                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: typeStyle.color.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(typeStyle.icon, size: 13, color: typeStyle.color),
+                          const SizedBox(width: 3),
+                          Text(
+                            typeStyle.label,
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: typeStyle.color,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
                     Text(
                       'APP - $shortId',
                       style: TextStyle(
@@ -492,6 +515,8 @@ class _OrderTileWidgetState extends State<OrderTileWidget> {
                       ),
                   ],
                 ),
+                const SizedBox(height: 12),
+                OrderProgressBar(order: order),
                 if (order.comment != null &&
                     order.comment!.trim().isNotEmpty) ...[
                   const SizedBox(height: 12),

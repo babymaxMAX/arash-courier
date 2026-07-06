@@ -155,6 +155,7 @@ class SyncService {
       case SyncActionType.receiveOrder:
         await supabase.from('orders').update({
           'received_at': data['received_at'] ?? task.payload,
+          if (data['status'] != null) 'status': data['status'],
         }).eq('id', task.orderId);
         break;
 

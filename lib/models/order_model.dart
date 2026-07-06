@@ -23,6 +23,10 @@ class OrderModel {
   String? clientPhone;
   late String deliveryCity;
 
+  /// Вид заявки: DELIVERY (доставка, Адлер→Абхазия, по умолчанию для всех
+  /// старых заявок) / RETURN (возврат) / SHIPMENT (отправка, Абхазия→Адлер).
+  String orderType = 'DELIVERY';
+
   /// Список URL фото (в Supabase — JSON-массив в колонке url_photo).
   List<String> photos = [];
 
@@ -84,6 +88,7 @@ class OrderModel {
     required String clientName,
     String? clientPhone,
     required String deliveryCity,
+    String orderType = 'DELIVERY',
     List<String>? photos,
     List<String>? clientQrCodes,
     List<String>? pvzQrCodes,
@@ -106,6 +111,7 @@ class OrderModel {
       ..clientName = clientName
       ..clientPhone = clientPhone
       ..deliveryCity = deliveryCity
+      ..orderType = orderType
       ..photos = photos ?? []
       ..clientQrCodes = clientQrCodes ?? []
       ..pvzQrCodes = pvzQrCodes ?? []
@@ -129,6 +135,7 @@ class OrderModel {
     String? clientName,
     String? clientPhone,
     String? deliveryCity,
+    String? orderType,
     List<String>? photos,
     List<String>? clientQrCodes,
     List<String>? pvzQrCodes,
@@ -151,6 +158,7 @@ class OrderModel {
       clientName: clientName ?? this.clientName,
       clientPhone: clientPhone ?? this.clientPhone,
       deliveryCity: deliveryCity ?? this.deliveryCity,
+      orderType: orderType ?? this.orderType,
       photos: photos ?? List<String>.from(this.photos),
       clientQrCodes: clientQrCodes ?? List<String>.from(this.clientQrCodes),
       pvzQrCodes: pvzQrCodes ?? List<String>.from(this.pvzQrCodes),
@@ -185,10 +193,16 @@ class OrderModel {
           ? json['client_phone'] as String
           : null,
       deliveryCity: json['delivery_city'] ?? '',
+      orderType: (json['order_type'] as String?)?.isNotEmpty == true
+          ? json['order_type'] as String
+          : 'DELIVERY',
       photos: parseList(json['url_photo']),
       clientQrCodes: parseList(json['client_qr_code']),
       pvzQrCodes: parseList(json['pvz_qr_code']),
-      status: _translateStatus(json['status']?.toString() ?? 'New'),
+      status: _translateStatus(
+        json['status']?.toString() ?? 'New',
+        orderType: (json['order_type'] as String?) ?? 'DELIVERY',
+      ),
       comment: json['comment']?.toString(),
       cancelReason: json['cancel_reason']?.toString(),
       clientPayment: (json['client_payment'] as num?)?.toDouble() ?? 0.0,
@@ -202,31 +216,44 @@ class OrderModel {
   }
 
   /// Публичный доступ к переводу статуса из БД для UI.
-  static String translateStatus(String englishStatus) =>
-      _translateStatus(englishStatus);
+  static String translateStatus(String englishStatus, {String orderType = 'DELIVERY'}) =>
+      _translateStatus(englishStatus, orderType: orderType);
 
-  static String _translateStatus(String englishStatus) {
+  static String _translateStatus(String englishStatus, {String orderType = 'DELIVERY'}) {
+    final isReturnOrShipment = orderType == 'RETURN' || orderType == 'SHIPMENT';
     switch (englishStatus.toUpperCase()) {
       case 'READY':
         return 'Готово';
       case 'IN_WAREHOUSE':
-        return 'На складе';
+        // Доставка: посылка прибыла на склад в Абхазии.
+        // Возврат/Отправка: клиент принёс, оператор принял на месте в Адлере.
+        return isReturnOrShipment ? 'Принята' : 'На складе';
       case 'WAITING':
-        return 'Ожидает';
+        // Доставка: заявка создана, курьер должен забрать.
+        // Возврат/Отправка: заявка создана клиентом, ещё не принята в офисе.
+        return isReturnOrShipment ? 'Создана' : 'Ожидает';
       case 'ISSUED':
         return 'Выдано';
       case 'SHIPPING':
-        return 'Готово';
+        // Доставка: используется приложением как общий маркер "готово" на
+        // чекбоксе заказа — сохраняем как есть, чтобы не сломать сортировку/
+        // подсчёт "выполнено". Возврат/Отправка: курьер передал посылку в ПВЗ
+        // в Адлере — реальный терминальный статус этого потока.
+        return isReturnOrShipment ? 'Отправлено' : 'Готово';
       case 'CANCELLED':
       case 'CANCELED':
         return 'Отменено';
       case 'RETURN':
       case 'RETURNED':
-        return 'Возврат';
+        return isReturnOrShipment ? 'Отправлено' : 'Возврат';
       case 'DEBT':
         return 'Долг';
       case 'NEW':
         return 'Новый';
+      case 'IN_TRANSIT':
+        return 'В пути';
+      case 'DELAYED_AT_ORIGIN':
+        return 'Задерживается';
       case 'IN_PROGRESS':
       case 'IN PROGRESS':
         return 'В пути';

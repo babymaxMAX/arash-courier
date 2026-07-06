@@ -240,21 +240,27 @@ class DatabaseService {
     await _sync.addTask(SyncActionType.delayOrder, id, payload);
   }
 
+  /// Курьер физически забрал заказ — фиксируем время и переводим в статус
+  /// «В пути» (новый, единый для всех видов заявок статус).
   Future<void> markReceivedByCourier(String id) async {
     final now = DateTime.now().toUtc();
 
     await _sync.applyLocalOrderPatch(id, (o) {
       o.receivedAt = now;
+      o.status = OrderModel.translateStatus('IN_TRANSIT', orderType: o.orderType);
     });
 
-    final payload = jsonEncode({'received_at': now.toIso8601String()});
+    final payload = jsonEncode({
+      'received_at': now.toIso8601String(),
+      'status': 'IN_TRANSIT',
+    });
 
     if (await _isOnline()) {
       try {
-        await supabase
-            .from('orders')
-            .update({'received_at': now.toIso8601String()})
-            .eq('id', id);
+        await supabase.from('orders').update({
+          'received_at': now.toIso8601String(),
+          'status': 'IN_TRANSIT',
+        }).eq('id', id);
         return;
       } catch (e) {
         await _sync.addTask(SyncActionType.receiveOrder, id, payload);

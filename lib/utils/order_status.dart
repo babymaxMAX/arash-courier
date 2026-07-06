@@ -29,7 +29,6 @@ class OrderStatus {
   static String forDatabase(String status) {
     switch (status) {
       case 'Готово':
-      case 'В пути':
         return 'SHIPPING';
       case 'Новый':
         return 'NEW';
@@ -38,6 +37,7 @@ class OrderStatus {
       case 'Доставлено':
         return 'DELIVERED';
       case 'Ожидает':
+      case 'Создана':
         return 'WAITING';
       case 'Выдано':
         return 'ISSUED';
@@ -45,6 +45,12 @@ class OrderStatus {
         return 'CANCELLED';
       case 'Возврат':
         return 'RETURN';
+      case 'В пути':
+        return 'IN_TRANSIT';
+      case 'Задерживается':
+        return 'DELAYED_AT_ORIGIN';
+      case 'Принята':
+        return 'IN_WAREHOUSE';
       default:
         final upper = status.toUpperCase();
         if (upper == 'DELAYED' || upper == 'POSTPONED') return 'delayed';

@@ -123,10 +123,23 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Future<void> _openAddOrder() async {
+  Future<void> _openAddOrder() => _createOrder();
+
+  Future<void> _openAddOrderForFolder(String company, String address) =>
+      _createOrder(prefillCompanyName: company, prefillCompanyAddress: address);
+
+  Future<void> _createOrder({
+    String? prefillCompanyName,
+    String? prefillCompanyAddress,
+  }) async {
     final result = await Navigator.push<OrderModel>(
       context,
-      MaterialPageRoute(builder: (context) => const AddOrderScreen()),
+      MaterialPageRoute(
+        builder: (context) => AddOrderScreen(
+          prefillCompanyName: prefillCompanyName,
+          prefillCompanyAddress: prefillCompanyAddress,
+        ),
+      ),
     );
     if (result == null || !mounted) return;
     try {
@@ -326,6 +339,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                     userEmail: _userEmail,
                                     onRefresh: _refreshOrders,
                                     compact: _isManager,
+                                    onAddOrder: _isManager ? _openAddOrderForFolder : null,
                                   );
 
                               return RefreshIndicator(

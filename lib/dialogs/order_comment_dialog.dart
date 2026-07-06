@@ -14,13 +14,26 @@ class OrderCommentDialog {
     await showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Комментарий'),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        content: TextField(
-          controller: controller,
-          maxLines: 4,
-          decoration: const InputDecoration(
-            hintText: 'Введите комментарий',
+        backgroundColor: Colors.white,
+        title: const Text(
+          'Комментарий',
+          style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        content: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.pink.shade50,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: TextField(
+            controller: controller,
+            maxLines: 4,
+            autofocus: true,
+            decoration: const InputDecoration(
+              hintText: 'Введите комментарий',
+              border: InputBorder.none,
+            ),
           ),
         ),
         actions: [
@@ -29,6 +42,10 @@ class OrderCommentDialog {
             child: const Text('Отмена'),
           ),
           FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.deepOrange.shade400,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
             onPressed: () async {
               try {
                 await DatabaseService()

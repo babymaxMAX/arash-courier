@@ -11,6 +11,7 @@ class PvzFolderCard extends StatelessWidget {
   final String userEmail;
   final VoidCallback onRefresh;
   final bool compact;
+  final void Function(String company, String address)? onAddOrder;
 
   const PvzFolderCard({
     super.key,
@@ -20,6 +21,7 @@ class PvzFolderCard extends StatelessWidget {
     required this.userEmail,
     required this.onRefresh,
     this.compact = false,
+    this.onAddOrder,
   });
 
   @override
@@ -82,10 +84,28 @@ class PvzFolderCard extends StatelessWidget {
             tilePadding: compact
                 ? const EdgeInsets.symmetric(horizontal: 10, vertical: 0)
                 : null,
-            title: Text(
-              company,
-              style: TextStyle(fontWeight: FontWeight.w800, fontSize: compact ? 13 : 16, color: style.color),
-            ),
+            title: onAddOrder == null
+                ? Text(
+                    company,
+                    style: TextStyle(fontWeight: FontWeight.w800, fontSize: compact ? 13 : 16, color: style.color),
+                  )
+                : GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => onAddOrder!(company, address),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            company,
+                            style: TextStyle(fontWeight: FontWeight.w800, fontSize: compact ? 13 : 16, color: style.color),
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        Icon(Icons.add_circle, size: compact ? 14 : 18, color: style.color.withValues(alpha: 0.6)),
+                      ],
+                    ),
+                  ),
             subtitle: compact
                 ? Text(
                     '$address · $doneCount/${orders.length}',

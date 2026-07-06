@@ -20,6 +20,7 @@ class OrderModel {
   late String responsiblePerson;
 
   late String clientName;
+  String? clientPhone;
   late String deliveryCity;
 
   /// Список URL фото (в Supabase — JSON-массив в колонке url_photo).
@@ -81,6 +82,7 @@ class OrderModel {
     required String companyAddress,
     required String responsiblePerson,
     required String clientName,
+    String? clientPhone,
     required String deliveryCity,
     List<String>? photos,
     List<String>? clientQrCodes,
@@ -102,6 +104,7 @@ class OrderModel {
       ..companyAddress = companyAddress
       ..responsiblePerson = responsiblePerson
       ..clientName = clientName
+      ..clientPhone = clientPhone
       ..deliveryCity = deliveryCity
       ..photos = photos ?? []
       ..clientQrCodes = clientQrCodes ?? []
@@ -124,6 +127,7 @@ class OrderModel {
     String? companyAddress,
     String? responsiblePerson,
     String? clientName,
+    String? clientPhone,
     String? deliveryCity,
     List<String>? photos,
     List<String>? clientQrCodes,
@@ -145,6 +149,7 @@ class OrderModel {
       companyAddress: companyAddress ?? this.companyAddress,
       responsiblePerson: responsiblePerson ?? this.responsiblePerson,
       clientName: clientName ?? this.clientName,
+      clientPhone: clientPhone ?? this.clientPhone,
       deliveryCity: deliveryCity ?? this.deliveryCity,
       photos: photos ?? List<String>.from(this.photos),
       clientQrCodes: clientQrCodes ?? List<String>.from(this.clientQrCodes),
@@ -176,6 +181,9 @@ class OrderModel {
       companyAddress: json['company_address'] ?? 'Адрес не указан',
       responsiblePerson: json['responsible_person'] ?? '',
       clientName: json['client_name'] ?? 'Без имени',
+      clientPhone: (json['client_phone'] as String?)?.isNotEmpty == true
+          ? json['client_phone'] as String
+          : null,
       deliveryCity: json['delivery_city'] ?? '',
       photos: parseList(json['url_photo']),
       clientQrCodes: parseList(json['client_qr_code']),
@@ -249,6 +257,7 @@ class OrderModel {
       'company_address': companyAddress,
       'responsible_person': responsiblePerson,
       'client_name': clientName,
+      'client_phone': clientPhone,
       'delivery_city': deliveryCity,
       'url_photo': encodeList(photos),
       'client_qr_code': encodeList(clientQrCodes),

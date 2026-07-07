@@ -137,7 +137,16 @@ class PvzFolderCard extends StatelessWidget {
               backgroundColor: isTaken ? Colors.grey.shade100 : style.color.withValues(alpha: 0.1),
               child: isTaken
                   ? Text(getUserAvatar(responsible), style: TextStyle(fontSize: compact ? 13 : 22))
-                  : Text(style.initials, style: TextStyle(color: style.color, fontWeight: FontWeight.bold, fontSize: compact ? 9 : 14)),
+                  : (style.assetPath != null
+                      ? ClipOval(
+                          child: Image.asset(
+                            style.assetPath!,
+                            width: compact ? 28 : 48,
+                            height: compact ? 28 : 48,
+                            fit: BoxFit.cover,
+                          ),
+                        )
+                      : Text(style.initials, style: TextStyle(color: style.color, fontWeight: FontWeight.bold, fontSize: compact ? 9 : 14))),
             ),
             children: [
             if (!compact && (!isTaken || canRelease))

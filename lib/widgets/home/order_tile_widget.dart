@@ -369,7 +369,7 @@ class _OrderTileWidgetState extends State<OrderTileWidget> {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(typeStyle.icon, size: 13, color: typeStyle.color),
+                          Image.asset(typeStyle.assetPath, width: 14, height: 14),
                           const SizedBox(width: 3),
                           Text(
                             typeStyle.label,

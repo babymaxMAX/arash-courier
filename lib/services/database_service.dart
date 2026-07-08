@@ -50,7 +50,12 @@ class DatabaseService {
                 .gte('date_created', todayStartIso);
           }
 
-          final response = await query.range(offset, offset + limit - 1);
+          // .order() обязателен: без него Postgres/PostgREST не гарантирует
+          // стабильный порядок строк между отдельными .range() запросами,
+          // из-за чего один и тот же заказ может попасть сразу в две страницы
+          // (дублирующийся ключ виджета и краш экрана папки при 1000+ заказов).
+          final response =
+              await query.order('id').range(offset, offset + limit - 1);
           allRows.addAll(response);
 
           if (response.length < limit) {
@@ -60,9 +65,13 @@ class DatabaseService {
         }
 
         final sortedOrders = <String, List<OrderModel>>{};
+        final seenIds = <String>{};
 
         for (final row in allRows) {
           final orderModel = OrderModel.fromJson(row);
+          if (!seenIds.add(orderModel.id)) {
+            continue;
+          }
           final folderKey =
               '${orderModel.companyName} - ${orderModel.companyAddress}';
           sortedOrders.putIfAbsent(folderKey, () => []).add(orderModel);

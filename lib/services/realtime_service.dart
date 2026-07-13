@@ -16,19 +16,35 @@ class RealtimeService {
 
   static const _debounceDuration = Duration(seconds: 1);
 
-  /// Подписка на INSERT/UPDATE/DELETE в public.orders.
+  /// Подписка на INSERT/UPDATE/DELETE в LogisticsOrder и app_order_meta.
+  ///
+  /// public.orders — это VIEW поверх этих двух таблиц, а Postgres logical
+  /// replication (на котором работает Supabase Realtime) не может публиковать
+  /// изменения VIEW напрямую — подписка на 'orders' никогда не срабатывает.
+  /// Слушаем реальные таблицы вместо неё.
   void subscribeToOrders(VoidCallback onDataChanged) {
     unsubscribeFromOrders();
 
-    _ordersChannel = supabase.channel('public:orders');
+    _ordersChannel = supabase.channel('public:orders-sync');
     _ordersChannel!
         .onPostgresChanges(
           event: PostgresChangeEvent.all,
           schema: 'public',
-          table: 'orders',
+          table: 'LogisticsOrder',
           callback: (payload) {
             debugPrint(
-              'Обновление в таблице orders: ${payload.eventType}',
+              'Обновление в таблице LogisticsOrder: ${payload.eventType}',
+            );
+            _debounced(onDataChanged);
+          },
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'app_order_meta',
+          callback: (payload) {
+            debugPrint(
+              'Обновление в таблице app_order_meta: ${payload.eventType}',
             );
             _debounced(onDataChanged);
           },
